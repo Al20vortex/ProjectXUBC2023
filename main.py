@@ -1,4 +1,8 @@
 import torch
+import torchvision
+
+
+import torch
 from torch import nn
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
