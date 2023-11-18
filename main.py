@@ -43,6 +43,19 @@ class NeuralNet(nn.Module):
 
     def add_layer(self, module: nn.Module):
         self.layers.append(module())
+
+    # NOTE: I am not sure if we want to add something to figure out the ideal kernel size, so I just set it to default values for now.
+    def add_conv_layer(self, out_channels, kernel_size=5):
+        if len(self.layers) > 0:
+            last_layer = self.layers[-1]
+            if isinstance(last_layer, nn.Conv2d):
+                in_channels = last_layer.out_channels
+            else:
+                print("Last layer is not a Conv2d layer.")
+        else:
+            in_channels = 1  #  1 for now; can be changed later
+        new_layer = nn.Conv2d(in_channels, out_channels, kernel_size)
+        self.layers.append(new_layer)
     
     def forward(self, x):
         for layer in self.layers:
