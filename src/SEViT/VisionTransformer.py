@@ -28,6 +28,7 @@ class VisionTransformer(nn.Module):
         super().__init__()
         self.patch_embedding = PatchEmbedding(image_size, patch_size, embed_dim, in_channels)
         self.transformer_blocks = nn.Sequential(*[TransformerBlock(embed_dim, num_heads) for _ in range(num_layers)])
+
         self.classifier = nn.Linear(embed_dim, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
