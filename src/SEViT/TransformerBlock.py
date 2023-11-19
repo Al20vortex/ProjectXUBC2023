@@ -17,8 +17,10 @@ class TransformerBlock(nn.Module):
         self.layer_norm_2 = nn.LayerNorm(embed_dim)
         self.fcn = nn.Sequential(
             nn.Linear(in_features=embed_dim, out_features=embed_dim),
-            nn.GELU(),
-            nn.Dropout1d()
+            # nn.GELU(),
+            nn.ReLU(),
+            # nn.Dropout1d()
+            nn.Dropout()
         )
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
