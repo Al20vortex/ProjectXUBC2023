@@ -29,8 +29,8 @@ class TransformerBlock(nn.Module):
 
         Returns: The transformer block after attention, layernorm and fcn
         """
-        x, _ = self.attention(query=X, key=X, value=X)
-        x1 = self.layer_norm_1(x + X)
+        attention_output, _ = self.attention(query=X, key=X, value=X)
+        x1 = self.layer_norm_1(attention_output + X)
         x = self.fcn(x1)
         x = self.layer_norm_2(x + x1)
         return x
