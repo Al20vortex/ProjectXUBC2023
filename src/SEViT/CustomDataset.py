@@ -4,9 +4,14 @@ from PIL import Image
 from torch.utils.data import Dataset
 import os
 from pathlib import Path
+import random
+random.seed(1)
 
 current_dir = Path("CustomDataset.py").absolute()
 parent_path = current_dir.parent.parent.parent.absolute()
+parent_path = str(parent_path)
+print(current_dir, "current dir")
+print(f"parent path: {parent_path}")
 
 
 class CustomDataset(Dataset):
@@ -18,8 +23,8 @@ class CustomDataset(Dataset):
         """
         Creates the custom dataset
         Args:
-            class_A_path:
-            class_B_path:
+            class_A_path: The path to class A. in my case, duck
+            class_B_path: The path to class B. In my case llama
             transforms:
         """
         super().__init__()
@@ -28,6 +33,7 @@ class CustomDataset(Dataset):
         self.class_B_images = [os.path.join(class_B_path, img) for img in os.listdir(class_B_path)]
         self.all_images = [(img, 0) for img in self.class_A_images] + \
                           [(img, 1) for img in self.class_B_images]
+        random.shuffle(self.all_images)
 
     def __len__(self):
         return len(self.all_images)
@@ -43,6 +49,8 @@ class CustomDataset(Dataset):
 
 
 if __name__ == "__main__":
-    path = Path("Attention.py").absolute()
-    parent_path = path.parent.parent.parent.absolute()
-    print(parent_path)
+    A = parent_path + "/llama-duck-ds/train/duck"
+    B = parent_path + "/llama-duck-ds/train/llama"
+    dataset = CustomDataset(A, B)
+    print(len(dataset))
+    print(dataset[0])
