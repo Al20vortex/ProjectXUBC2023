@@ -1,7 +1,5 @@
 import torch
 import torchvision
-
-
 import torch
 from torch import nn
 from torchvision import datasets, transforms
@@ -11,7 +9,16 @@ from torch.utils.data import DataLoader
 # Define our hyperparameters
 INPUT_SHAPE = (64, 64)
 OUTPUT_SHAPE = (1,)
-POSSIBLE_MODULES = [nn.Conv2d]
+POSSIBLE_MODULES = [nn.Conv2d, ]
+
+# TODO set up these hyper params as config options for each possible module
+module_config = {
+    "Conv2d": {
+        "kernel_size": [1, 3, 5],
+        "padding": [0, 1, 2],
+        "activation": [nn.ReLU, nn.LeakyReLU]
+    },
+}
 
 def get_device():
     if torch.cuda.is_available():
@@ -26,29 +33,36 @@ device = get_device()
 print(f"Using device: {device}")
 
 class NeuralNet(nn.Module):
-    def __init__(self, initial_module_list):		
+    def __init__(self):		
         super(NeuralNet, self).__init__()
-        self.layers = nn.ModuleList(initial_module_list)
-
+        
+        # input layer
+        self.input_layer = nn.Sequential(nn.Conv2d(3, 3, kernel_size=3, stride=1, padding=1), nn.ReLU())
+        self.layers = nn.ModuleList()
 
         # Currently using a preset output layer which lowers the resolution from 64x64 down to 1x1
-        #   TODO This needs to change in the future to be more adaptive/nonrigid
+        #  TODO This needs to change in the future to be more adaptive/nonrigid
         self.out = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(32, 1, kernel_size=3, stride=1, padding=1),
-            nn.AdaptiveAvgPool2d((1, 1)),  # Resize spatial dimensions to 1x1
-            nn.Flatten(),  # Flatten the output
+            nn.Conv2d(3, 1, kernel_size=3, stride=1, padding=1),   # TODO we need to make this infer somehow so that it connects to how many feature maps were in the previous layer. 
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(1*64*64, 1),
+            nn.Sigmoid()
+        )
+
+    def adapt_output_layer(self, num_feature_maps, x_dim, y_dim):
+        self.out = nn.Sequential(
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(num_feature_maps*x_dim*y_dim, OUTPUT_SHAPE),
+            nn.Sigmoid()
         )
 
     def add_layer(self, module: nn.Module):
         self.layers.append(module())
     
     def forward(self, x):
+        x = self.input_layer(x)
         for layer in self.layers:
             x = layer(x)
         x = self.out(x)
@@ -76,8 +90,7 @@ def get_module_benefit(params, module):
 # Define transformations for the dataset
 transform = transforms.Compose([
     transforms.Resize(INPUT_SHAPE),  # Resize images
-    transforms.Grayscale(),
-    transforms.ToTensor(),
+    transforms.ToTensor()
     # Add more transformations if necessary
 ])
 
@@ -92,14 +105,12 @@ val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
 
 def train():
 
-    # complete the code to load the dataset
-    initial_layer = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, stride=1, padding=1)
+    # TODO complete the code to load the dataset
+    model = NeuralNet().to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_fun = nn.BCELoss()
 
-    model = NeuralNet([initial_layer]).to(device)
-    optimizer = torch.optim.Adamax(model.parameters(), lr=1e-4)
-    loss_fun = nn.BCEWithLogitsLoss()
-
-    for epoch in range(100):
+    for epoch in range(1000):
         for input, target in train_loader:  # Iterate over your data
             input, target = input.to(device).float(), target.to(device).float()
             optimizer.zero_grad()
@@ -119,6 +130,11 @@ def train():
                 benefit_scores = torch.zeros(len(POSSIBLE_MODULES))
 
                 for j, module in enumerate(POSSIBLE_MODULES):
+                    # TODO in here we should keep track of the shape of the last layer before the output.
+                    #   This is in order to ensure the layer we're adding can accept inputs of this shape
+
+                    # also for each laeyr, we should have a list of possible initialization options
+
                     # check the benefit score of adding this module
                     benefit_scores[j] = get_module_benefit({}, module)
                 
