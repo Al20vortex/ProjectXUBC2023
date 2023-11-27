@@ -3,13 +3,12 @@ import torch.nn as nn
 from VisionTransformer import VisionTransformer
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
-from torchvision import transforms
+from torchvision import transforms, datasets
 from CustomDataset import CustomDataset
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import torchvision.datasets as datasets
 
 current_dir = Path("CustomDataset.py").absolute()
 parent_path = current_dir.parent.parent.parent.absolute()
@@ -20,7 +19,7 @@ llamma_path = parent_path + "/llama-duck-ds/train/llama"
 lr = 1e-4
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-EPOCHS = 400
+EPOCHS = 50
 BATCH_SIZE = 32
 
 
@@ -114,7 +113,7 @@ def train(ml_model,
 
             train_loss_epoch.append(loss.item())
 
-        train_accuracy = np.mean(correct_train)#correct_train / len(train_dataset)  # total_train
+        train_accuracy = correct_train/len(train_loader)#np.mean(correct_train)#correct_train / len(train_dataset)  # total_train
         train_accuracies.append(train_accuracy)
         train_losses.append(np.mean(train_loss_epoch))
 
@@ -135,7 +134,7 @@ def train(ml_model,
                 validation_acc = calculate_accuracy(y_true=labels, y_pred=predicted)
                 correct_val += validation_acc
 
-            val_accuracy = correct_val / len(validation_dataset)  # total_val
+            val_accuracy = correct_val / len(validation_loader)  # total_val
             validation_accuracies.append(val_accuracy)
             validation_losses.append(np.mean(validation_loss_epoch))
     return (train_losses, validation_losses), (train_accuracies, validation_accuracies)
@@ -144,14 +143,16 @@ def train(ml_model,
 if __name__ == "__main__":
     model = VisionTransformer(
         image_size=64,
-        patch_size=16,
-        embed_dim=8,
-        num_layers=4,
+        patch_size=4,
+        embed_dim=16,
+        num_layers=8,
         num_heads=8,
         num_classes=2,
         in_channels=3,
     )
     print(model)
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(n_params, "n params")
     losses, accuracies = train(ml_model=model, class_A_path=duck_path, class_B_path=llamma_path)
     t_loss, v_loss = losses
     t_acc, v_acc = accuracies

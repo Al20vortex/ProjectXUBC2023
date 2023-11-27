@@ -10,8 +10,8 @@ random.seed(1)
 current_dir = Path("CustomDataset.py").absolute()
 parent_path = current_dir.parent.parent.parent.absolute()
 parent_path = str(parent_path)
-print(current_dir, "current dir")
-print(f"parent path: {parent_path}")
+# print(current_dir, "current dir")
+# print(f"parent path: {parent_path}")
 
 
 class CustomDataset(Dataset):
@@ -33,7 +33,7 @@ class CustomDataset(Dataset):
         self.class_B_images = [os.path.join(class_B_path, img) for img in os.listdir(class_B_path)]
         self.all_images = [(img, 0) for img in self.class_A_images] + \
                           [(img, 1) for img in self.class_B_images]
-        random.shuffle(self.all_images)
+        # random.shuffle(self.all_images)
 
     def __len__(self):
         return len(self.all_images)
