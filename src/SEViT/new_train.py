@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms, datasets
-from VisionTransformer import VisionTransformer
-from CustomDataset import CustomDataset
+from visionTransformer import VisionTransformer
+from customDataset import CustomDataset
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,6 +26,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 EPOCHS = 2
 BATCH_SIZE = 32
 
+
 def calculate_accuracy(y_true, y_pred) -> float:
     """
     Calculates the accuracy of the model
@@ -36,6 +37,7 @@ def calculate_accuracy(y_true, y_pred) -> float:
     correct = torch.eq(y_true, y_pred).sum().item()
     accuracy = (correct / len(y_pred)) * 100
     return accuracy
+
 
 def train_2(ml_model, learning_rate=lr, image_size=64):
     """
@@ -65,17 +67,21 @@ def train_2(ml_model, learning_rate=lr, image_size=64):
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.45], std=[0.229])
     ])
-    #---
-    train_dataset = datasets.MNIST(root='./mnist_data', train=True, download=True, transform=train_transform)
-    validation_dataset = datasets.MNIST(root='./mnist_data', train=False, download=True, transform=val_transform)
+    # ---
+    train_dataset = datasets.MNIST(
+        root='./mnist_data', train=True, download=True, transform=train_transform)
+    validation_dataset = datasets.MNIST(
+        root='./mnist_data', train=False, download=True, transform=val_transform)
 
-    #---
+    # ---
 
     # train_dataset = datasets.ImageFolder(root=train_path, transform=train_transform)
     # validation_dataset = datasets.ImageFolder(root=validation_path, transform=val_transform)
 
-    train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    validation_loader = DataLoader(dataset=validation_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    train_loader = DataLoader(dataset=train_dataset,
+                              batch_size=BATCH_SIZE, shuffle=True)
+    validation_loader = DataLoader(
+        dataset=validation_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     train_losses = []
     validation_losses = []
@@ -84,17 +90,16 @@ def train_2(ml_model, learning_rate=lr, image_size=64):
 
     print(len(train_dataset), len(validation_dataset))
 
-
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(ml_model.parameters(), lr=learning_rate, weight_decay=1e-3)
+    optimizer = optim.Adam(ml_model.parameters(),
+                           lr=learning_rate, weight_decay=1e-3)
 
     # Training loop
     for epoch in tqdm(range(EPOCHS)):
         ml_model.train()
         total_train, correct_train = 0, 0
         train_loss_epoch = []
-
 
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
@@ -128,7 +133,8 @@ def train_2(ml_model, learning_rate=lr, image_size=64):
         validation_loss_epoch = []
         with torch.no_grad():
             for val_images, val_labels in validation_loader:
-                val_images, val_labels = val_images.to(device), val_labels.to(device)
+                val_images, val_labels = val_images.to(
+                    device), val_labels.to(device)
 
                 outputs = ml_model(val_images)
                 val_loss = criterion(outputs, val_labels)
@@ -152,6 +158,7 @@ def train_2(ml_model, learning_rate=lr, image_size=64):
     # wandb.finish()
 
     return (train_losses, validation_losses), (train_accuracies, validation_accuracies)
+
 
 # Your model initialization and training call here
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from PatchEmbedding import PatchEmbedding
-from TransformerBlock import TransformerBlock
+from patchEmbedding import PatchEmbedding
+from transformerBlock import TransformerBlock
 
 
 class VisionTransformer(nn.Module):
@@ -26,13 +26,14 @@ class VisionTransformer(nn.Module):
             in_channels: number of channels in the input image, defaults to 3 for RGB
         """
         super().__init__()
-        self.patch_embedding = PatchEmbedding(image_size, patch_size, embed_dim, in_channels)
-        self.transformer_blocks = nn.Sequential(*[TransformerBlock(embed_dim, num_heads) for _ in range(num_layers)])
+        self.patch_embedding = PatchEmbedding(
+            image_size, patch_size, embed_dim, in_channels)
+        self.transformer_blocks = nn.Sequential(
+            *[TransformerBlock(embed_dim, num_heads) for _ in range(num_layers)])
 
         self.classifier = nn.Sequential(
             nn.Linear(embed_dim, embed_dim//2),
             nn.Linear(embed_dim//2, num_classes))
-
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -50,6 +51,7 @@ class VisionTransformer(nn.Module):
 
 
 if __name__ == "__main__":
-    classifier = VisionTransformer(image_size=64, patch_size=16, embed_dim=8, num_heads=8, num_layers=4, num_classes=3)
+    classifier = VisionTransformer(
+        image_size=64, patch_size=16, embed_dim=8, num_heads=8, num_layers=4, num_classes=3)
     rand = torch.ones(32, 3, 64, 64)
     print(classifier(rand).shape)

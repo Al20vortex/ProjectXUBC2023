@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
-from VisionTransformer import VisionTransformer
+from visionTransformer import VisionTransformer
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms, datasets
-from CustomDataset import CustomDataset
+from customDataset import CustomDataset
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
@@ -66,12 +66,16 @@ def train(ml_model,
     validation_accuracies = []
 
     # Dataset and DataLoader
-    dataset = CustomDataset(class_A_path=class_A_path, class_B_path=class_B_path, transforms=transform)
+    dataset = CustomDataset(class_A_path=class_A_path,
+                            class_B_path=class_B_path, transforms=transform)
     train_size = int(0.8 * len(dataset))
     validation_size = len(dataset) - train_size
-    train_dataset, validation_dataset = random_split(dataset=dataset, lengths=[train_size, validation_size])
-    train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    validation_loader = DataLoader(dataset=validation_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    train_dataset, validation_dataset = random_split(
+        dataset=dataset, lengths=[train_size, validation_size])
+    train_loader = DataLoader(dataset=train_dataset,
+                              batch_size=BATCH_SIZE, shuffle=True)
+    validation_loader = DataLoader(
+        dataset=validation_dataset, batch_size=BATCH_SIZE, shuffle=False)
     print(len(dataset))
     print(len(train_loader), len(validation_loader), "Loaders")
     print(len(train_dataset), len(validation_dataset))
@@ -108,12 +112,14 @@ def train(ml_model,
             optimizer.zero_grad()
             _, predicted = torch.max(outputs, dim=1)
 
-            train_accuracy = calculate_accuracy(y_true=labels, y_pred=predicted)
+            train_accuracy = calculate_accuracy(
+                y_true=labels, y_pred=predicted)
             correct_train += train_accuracy
 
             train_loss_epoch.append(loss.item())
 
-        train_accuracy = correct_train/len(train_loader)#np.mean(correct_train)#correct_train / len(train_dataset)  # total_train
+        # np.mean(correct_train)#correct_train / len(train_dataset)  # total_train
+        train_accuracy = correct_train/len(train_loader)
         train_accuracies.append(train_accuracy)
         train_losses.append(np.mean(train_loss_epoch))
 
@@ -131,7 +137,8 @@ def train(ml_model,
                 # Calculate validation accuracy
                 _, predicted = torch.max(preds, dim=1)
 
-                validation_acc = calculate_accuracy(y_true=labels, y_pred=predicted)
+                validation_acc = calculate_accuracy(
+                    y_true=labels, y_pred=predicted)
                 correct_val += validation_acc
 
             val_accuracy = correct_val / len(validation_loader)  # total_val
@@ -153,7 +160,8 @@ if __name__ == "__main__":
     print(model)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(n_params, "n params")
-    losses, accuracies = train(ml_model=model, class_A_path=duck_path, class_B_path=llamma_path)
+    losses, accuracies = train(
+        ml_model=model, class_A_path=duck_path, class_B_path=llamma_path)
     t_loss, v_loss = losses
     t_acc, v_acc = accuracies
     # print(t_loss, v_loss)
