@@ -75,6 +75,7 @@ class SelfExpandingCNN(nn.Module):
         channels = self.layers[-4].out_channels
         identity_layer = IdentityConvLayer(channels)
         self.layers.insert(-3, identity_layer)
+        self.layers.insert(-3, nn.ReLU())
 
     def compute_fisher_information(self, dataloader: torch.Tensor, criterion: torch.Tensor) -> dict:
         """
