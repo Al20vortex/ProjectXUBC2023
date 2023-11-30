@@ -5,6 +5,7 @@ from typing import List
 
 
 class IdentityConvLayer(nn.Module):
+
     def __init__(self, channels) -> None:
         """
         An identity Convolution Layer
