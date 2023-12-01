@@ -50,7 +50,8 @@ class SelfExpandingCNN(nn.Module):
             self.layers.append(nn.MaxPool2d(2))
 
         # Assuming 4x4 feature map size before FC layer
-        self.fc = nn.Linear(channels_list[-1] * 4 * 4, n_classes)
+        fc_input_size = self._get_conv_output()
+        self.fc = nn.Linear(fc_input_size, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -73,10 +74,31 @@ class SelfExpandingCNN(nn.Module):
         """
         Adds a layer to the CNN. Called when the criteria is met
         """
-        channels = self.layers[-4].out_channels
+        for layer in reversed(self.layers):
+            if isinstance(layer, nn.Conv2d):
+                channels = layer.out_channels
+                break
+        # channels = self.layers[-4].out_channels
+        insert_index = len(self.layers) - 3
         identity_layer = IdentityConvLayer(channels)
-        self.layers.insert(-3, identity_layer)
-        self.layers.insert(-3, nn.ReLU())
+        self.layers.insert(insert_index, identity_layer)
+        self.layers.insert(insert_index+1, nn.ReLU())
+
+    def _get_conv_output(self, shape=(1, 28, 28)):
+        """
+        Pass a dummy input through the convolutional layers to get the output size.
+
+        Args:
+            shape (tuple): The shape of the input (C, H, W).
+
+        Returns:
+            int: The size of the output after it has been flattened.
+        """
+        dummy_input = torch.autograd.Variable(torch.rand(1, *shape))
+        output = dummy_input
+        for layer in self.layers:
+            output = layer(output)
+        return int(torch.flatten(output, 1).size(1))
 
     def compute_fisher_information(self, dataloader: torch.Tensor, criterion: torch.Tensor) -> dict:
         """
