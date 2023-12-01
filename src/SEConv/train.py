@@ -84,7 +84,7 @@ def train_model(model: SelfExpandingCNN,
         metrics.append((avg_train_loss, avg_validation_loss,
                        train_accuracy, validation_accuracy))
 
-        # Check for expansion
+        # expand if score above threshold
         model.expand_if_necessary(train_loader, criterion, threshold)
         print(model)
     wandb.finish()
