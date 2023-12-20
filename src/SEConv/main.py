@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 from train import train_model
 from data_preprocess import train_loader, validation_loader, BATCH_SIZE
-from self_expanding_CNN import SelfExpandingCNN
+# from self_expanding_CNN import SelfExpandingCNN
+from new_SeConv import SelfExpandingCNN
 
 
 EPOCHS = 20
