@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from patchEmbedding import PatchEmbedding
-from transformerBlock import TransformerBlock
+from PatchEmbedding import PatchEmbedding
+from TransformerBlock import TransformerBlock
 
 
 class VisionTransformer(nn.Module):

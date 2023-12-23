@@ -149,7 +149,7 @@ class NeuralNet(nn.Module):
                 fisher_diag = fisher_information[name]
                 natural_grad_approx += (param.grad **
                                         2 / (fisher_diag + 1e-5)).sum()
-        return natural_grad_approx.item() / num_params  # TODO should this be averaged out like this?
+        return natural_grad_approx.item() / num_params
 
 
 def identity_conv_init(conv_layer):

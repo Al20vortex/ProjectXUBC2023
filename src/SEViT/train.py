@@ -1,26 +1,43 @@
 import torch
 import torch.nn as nn
-from visionTransformer import VisionTransformer
+from VisionTransformer import VisionTransformer
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms, datasets
-from customDataset import CustomDataset
+from CustomDataset import CustomDataset
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import wandb
 
 current_dir = Path("CustomDataset.py").absolute()
 parent_path = current_dir.parent.parent.parent.absolute()
 parent_path = str(parent_path)
-duck_path = parent_path + "/llama-duck-ds/train/duck"
-llamma_path = parent_path + "/llama-duck-ds/train/llama"
+# duck_path = parent_path + "/llama-duck-ds/train/duck"
+# llamma_path = parent_path + "/llama-duck-ds/train/llama"
+duck_path = "llama-duck-ds/train/duck"
+llamma_path = "llama-duck-ds/train/llama"
+
 
 lr = 1e-4
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 EPOCHS = 50
 BATCH_SIZE = 32
+
+wandb.init(
+    # set the wandb project where this run will be logged
+    project="ProjectX",
+    
+    # track hyperparameters and run metadata
+    config={
+    "learning_rate": lr,
+    "architecture": "VisionTransformer",
+    "dataset": "DuckLlama",
+    "epochs": EPOCHS,
+    }
+)
 
 
 def calculate_accuracy(y_true, y_pred) -> float:
@@ -88,7 +105,7 @@ def train(ml_model,
     ml_model.to(device)
 
     # Training loop
-    for epoch in tqdm(range(EPOCHS)):
+    for epoch in range(EPOCHS):
         train_loss_epoch = []
         validation_loss_epoch = []
         total_train = 0
@@ -122,7 +139,8 @@ def train(ml_model,
         train_accuracy = correct_train/len(train_loader)
         train_accuracies.append(train_accuracy)
         train_losses.append(np.mean(train_loss_epoch))
-
+        print(f"Epoch: {epoch} Train Loss: {np.mean(train_loss_epoch)}")
+        wandb.log({"Train Acc": train_accuracy, "Train Loss": loss})
         ml_model.eval()
         with torch.no_grad():
             total_val = 0
@@ -144,6 +162,7 @@ def train(ml_model,
             val_accuracy = correct_val / len(validation_loader)  # total_val
             validation_accuracies.append(val_accuracy)
             validation_losses.append(np.mean(validation_loss_epoch))
+        wandb.log({"Val Acc": val_accuracy, "Val Loss": np.mean(validation_loss_epoch)})
     return (train_losses, validation_losses), (train_accuracies, validation_accuracies)
 
 
