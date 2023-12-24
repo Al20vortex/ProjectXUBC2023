@@ -1,0 +1,44 @@
+import math
+import torch
+
+
+class PositionalEncoding:
+    def __init__(self, dim: int, max_position: int) -> None:
+        """Implements a sinusoidal positional encoding
+
+        Args:
+            dim (int): The dimension of the input embeddings
+            max_position (int): The maximum number of positions (the number of embeddings)
+        """
+        self.dim = dim
+        self.max_position = max_position
+
+    def generate(self) -> torch.tensor:
+        """Generates the positional encoding
+
+        Returns:
+            torch.tensor: The positional encodings generated
+        """
+        # Create a tensor with positions from 0 to max_position - 1
+        positions = torch.arange(0, self.max_position).unsqueeze(1)
+
+        # Calculate the div_term for the sinusoidal functions
+        div_term = torch.exp(torch.arange(0, self.dim, 2)
+                             * - math.log(10_000) / self.dim)
+
+        # Calculate the sinusoidal embeddings for the positions
+        sin_embedding = torch.sin(positions * div_term)
+        cos_embedding = torch.cos(positions * div_term)
+
+        # Stack sin and cos embeddings together along the last dimension
+        embedding = torch.stack((sin_embedding, cos_embedding), dim=2)
+
+        # Reshape the embedding tensor to have shape (max_position, dim)
+        embedding = embedding.view(self.max_position, -1)
+
+        return embedding
+
+
+if __name__ == "__main__":
+    embed = PositionalEncoding(8, 12).generate()
+    print(embed)
