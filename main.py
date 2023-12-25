@@ -19,13 +19,13 @@ EPOCHS = 1000
 LEARNING_RATE = 1e-3
 BATCH_SIZE = 256
 FIXED_OUTPUT_CHANNELS = 16
-L1_REG = 1e-5
+L1_REG = 1e-4
 
 # Set up hyperparameters for each possible single module
 single_layer_configs = {
     "Conv2d": {
         "out_channels": [8, 16, 32, 64],
-        "kernel_size": [3, 5, 7],
+        "kernel_size": [3, 5],
         "stride": [1],
     },
 }
