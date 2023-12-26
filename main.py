@@ -14,17 +14,17 @@ INPUT_SHAPE = (3, 64, 64)
 OUTPUT_SHAPE = (1,)
 POSSIBLE_SINGLE_MODULES = [nn.Conv2d]  # TODO ADD MORE
 POSSIBLE_PAIR_MODULES = [nn.MaxPool2d]  # TODO ADD MORE, like CONV2d TRANSPOSE
-TAU = 2.0
+TAU = 10.0
 EPOCHS = 1000
 LEARNING_RATE = 1e-3
 BATCH_SIZE = 256
 FIXED_OUTPUT_CHANNELS = 16
 L1_REG = 1e-4
 
-# Set up hyperparameters for each possible single module
+# Set up parameters for each possible single module
 single_layer_configs = {
     "Conv2d": {
-        "out_channels": [8, 16, 32, 64],
+        "out_channels": [8],
         "kernel_size": [3, 5],
         "stride": [1],
     },
@@ -331,6 +331,68 @@ def calculate_expansion_score_with_addition(model: NeuralNet, train_loader, loss
     # Subtract the L1 penalty from the natural expansion score
     return n_p - l1_penalty
 
+
+def upgrade_conv_layer(layer, scale_factor=2, is_last_conv_before_output=False, fixed_output_channels=FIXED_OUTPUT_CHANNELS):
+    if not isinstance(layer, nn.Conv2d):
+        raise ValueError("Layer must be a Conv2D layer.")
+
+    original_out_channels = layer.out_channels
+    new_out_channels = int(layer.out_channels * scale_factor)
+
+    if is_last_conv_before_output:
+        new_out_channels = min(new_out_channels, fixed_output_channels)
+
+    # Check if the number of output channels has changed
+    output_channels_changed = new_out_channels != original_out_channels
+
+    # Create a new Conv2D layer with the updated number of output channels
+    upgraded_layer = nn.Conv2d(
+        in_channels=layer.in_channels,
+        out_channels=new_out_channels,
+        kernel_size=layer.kernel_size,
+        stride=layer.stride,
+        padding=layer.padding,
+        dilation=layer.dilation,
+        groups=layer.groups,
+        bias=(layer.bias is not None)
+    ).to(device)
+
+
+    # Initialize the new layer with zeros
+    upgraded_layer.weight.data.zero_()
+    if upgraded_layer.bias is not None:
+        upgraded_layer.bias.data.zero_()
+
+    # Copy the old weights and biases to the new layer
+    with torch.no_grad():
+        # Copy existing weights and biases
+        min_out_channels = min(layer.out_channels, new_out_channels)
+        upgraded_layer.weight.data[:min_out_channels, :, :, :] = layer.weight[:min_out_channels, :, :, :]
+        if layer.bias is not None:
+            upgraded_layer.bias.data[:min_out_channels] = layer.bias[:min_out_channels]
+
+    return upgraded_layer, output_channels_changed
+
+
+def calculate_expansion_score_with_upgrade(model: NeuralNet, train_loader, loss_fun, position, scale_factor=1.5):
+    # Create a deep copy of the model
+    model_copy = copy.deepcopy(model)
+
+    # Upgrade a layer at the specified position
+    if position < len(model_copy.layers) and isinstance(model_copy.layers[position], nn.Conv2d):
+        if position == len(model_copy.layers) - 2: # -2 because very last one is the activation
+            last_before_out = True
+        else:
+            last_before_out = False
+        upgrade_conv_layer(model_copy.layers[position], scale_factor, last_before_out)
+
+    # Compute natural expansion score
+    n_p = model_copy.compute_natural_expansion_score(train_loader, loss_fun)
+
+    # Compute the L1 penalty
+    l1_penalty = L1_REG * sum(p.abs().sum() for p in model_copy.parameters())
+    return n_p - l1_penalty
+
 def calculate_insertion_benefits(model: NeuralNet, input_shape, possible_modules, module_config, train_loader, loss_fun):
     n_c = model.compute_natural_expansion_score(train_loader, loss_fun)  # Current expansion score
     benefits = []
@@ -340,7 +402,7 @@ def calculate_insertion_benefits(model: NeuralNet, input_shape, possible_modules
     # Position before the output module
     position_before_output = len(model.layers)
 
-    # Single Changes
+    # Single Addition
     for i in range(0, position_before_output + 1, 2):  # Count by twos to skip over activation layers
         for module_type in possible_modules:
             local_config = module_config[module_type.__name__].copy()  # Make a local copy of the configuration
@@ -358,21 +420,62 @@ def calculate_insertion_benefits(model: NeuralNet, input_shape, possible_modules
                     config_dict['in_channels'] = x.shape[1]
                 config_dict = update_padding_for_module(module_type, config_dict)
                 n_p = calculate_expansion_score_with_addition(model, train_loader, loss_fun, i, module_type, config_dict)
-                # print("Penalized n_p:", n_p.item())
-                # print("n_c:", n_c)
                 ratio = n_p / n_c
-                print("n_p/n_c ", ratio.item())
+                # print("Add n_p/n_c", ratio.item())
                 if ratio > TAU:
-                    benefits.append((ratio, i, module_type, config_dict))
+                    benefits.append(("add", ratio, i, module_type, config_dict))
 
         # Forward pass through the next convolutional and activation layers
         if i < len(model.layers):
             x = model.layers[i](x)  # Convolutional layer
             if i+1 < len(model.layers):
                 x = model.layers[i+1](x)  # Activation layer
+   
+    # Single Upgrade TODO
+    for i in range(0, position_before_output + 1, 2):
+        if i < len(model.layers) and isinstance(model.layers[i], nn.Conv2d):
+            n_p = calculate_expansion_score_with_upgrade(model, train_loader, loss_fun, i)
+            ratio = n_p / n_c
+            # print("Upgrade n_p/n_c", ratio.item())
+            if ratio > TAU:
+                benefits.append(("upgrade", ratio, i))  # Append upgrade action
 
-    # Paired Changes
+    # Paired Changes TODO later
+                    
     return benefits
+
+def adapt_subsequent_layer(model, upgrade_position):
+    """
+    Adapt the subsequent layers in the model after upgrading a Conv2D layer to ensure the input channels match.
+
+    Args:
+        model (NeuralNet): The neural network model.
+        upgrade_position (int): The position of the upgraded layer in the model's layer list.
+    """
+    if upgrade_position < 0 or upgrade_position >= len(model.layers) - 1:
+        return  # No need to adapt if the upgraded layer is the last one
+
+    # Retrieve the upgraded layer's output channels
+    upgraded_layer = model.layers[upgrade_position]
+    if not isinstance(upgraded_layer, nn.Conv2d):
+        return  # No adaptation needed if the upgraded layer is not a Conv2d layer
+    new_in_channels = upgraded_layer.out_channels
+
+    # Adapt all subsequent Conv2d layers
+    for i in range(upgrade_position + 1, len(model.layers)):
+        if isinstance(model.layers[i], nn.Conv2d):
+            layer = model.layers[i]
+            model.layers[i] = nn.Conv2d(
+                in_channels=new_in_channels,
+                out_channels=layer.out_channels,
+                kernel_size=layer.kernel_size,
+                stride=layer.stride,
+                padding=layer.padding,
+                dilation=layer.dilation,
+                groups=layer.groups,
+                bias=(layer.bias is not None)
+            ).to(device)
+            new_in_channels = layer.out_channels  # Update new_in_channels for next layers
 
 def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -417,19 +520,36 @@ def train():
         
         print(f'Epoch: {epoch} Train Loss: {loss.item()} Train Acc: {train_acc:.2f}% Val Loss: {avg_val_loss:.4f} Val Acc: {val_acc:.2f}% Number of Parameters: {num_params}')
 
-        if epoch % 10 == 0:
-            print("Model Summary:")
-            summary(model, input_size=INPUT_SHAPE)
+        # if epoch % 10 == 0:
+        #     print("Model Summary:")
+            # summary(model, input_size=INPUT_SHAPE)
 
 
         # Calculate benefits for all possible insertions
         benefits = calculate_insertion_benefits(model, INPUT_SHAPE, POSSIBLE_SINGLE_MODULES, single_layer_configs, train_loader, loss_fun)
 
-        # Select the best action if any are benefitial
-        if benefits and len(benefits):
-            _, position, best_module, best_config = select_best_action(benefits)
-            # Insert the new layer
-            model.insert_layer(position, best_module, **best_config)
+        # Select the best action if any are beneficial
+        if benefits:
+            best_action = select_best_action(benefits)
+            action_type, ratio, position = best_action[:3]
+
+            print("Best Action", best_action)
+            if action_type == "upgrade":
+                # Perform the upgrade action
+                upgraded_layer, output_channels_changed = upgrade_conv_layer(
+                    model.layers[position], 
+                    scale_factor=2, 
+                    is_last_conv_before_output=(position == len(model.layers) - 2)
+                )
+                model.layers[position] = upgraded_layer  # Replace the old layer
+
+                # Adapt subsequent layers if output channels have changed
+                if output_channels_changed:
+                    adapt_subsequent_layer(model, position)            
+            elif action_type == "add":
+                # Perform the add action
+                best_module, best_config = best_action[3:]
+                model.insert_layer(position, best_module, **best_config)
 
         # Update the next layer after that one as necessary
         # TODO For this we need to adapt that next layer to accept the number of feature maps outputted by the newly added layer.
