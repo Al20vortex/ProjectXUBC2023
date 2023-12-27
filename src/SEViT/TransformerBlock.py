@@ -12,7 +12,8 @@ class TransformerBlock(nn.Module):
             num_heads: The number of heads in the transformer block
         """
         super().__init__()
-        self.attention = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads)
+        self.attention = nn.MultiheadAttention(
+            embed_dim=embed_dim, num_heads=num_heads)
         self.layer_norm_1 = nn.LayerNorm(embed_dim)
         self.layer_norm_2 = nn.LayerNorm(embed_dim)
         self.fcn = nn.Sequential(
@@ -24,13 +25,6 @@ class TransformerBlock(nn.Module):
         )
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        """
-        Performs the forward pass
-        Args:
-            X: The input tensor
-
-        Returns: The transformer block after attention, layernorm and fcn
-        """
         attention_output, _ = self.attention(query=X, key=X, value=X)
         x1 = self.layer_norm_1(attention_output + X)
         x = self.fcn(x1)

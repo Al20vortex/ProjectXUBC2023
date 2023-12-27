@@ -3,13 +3,15 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms, datasets
-from visionTransformer import VisionTransformer
-from customDataset import CustomDataset
+from VisionTransformer import VisionTransformer
+from CustomDataset import CustomDataset
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import wandb
+from utils import get_device
+# from positional import PositionalEncoding
 
 wandb.login()
 # Your existing code for paths, learning rate, etc.
@@ -22,7 +24,8 @@ validation_path = parent_path + "/llama-duck-ds/val"
 
 lr = 3e-4
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = get_device()  # torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(device)
 EPOCHS = 2
 BATCH_SIZE = 32
 
@@ -95,6 +98,8 @@ def train_2(ml_model, learning_rate=lr, image_size=64):
     optimizer = optim.Adam(ml_model.parameters(),
                            lr=learning_rate, weight_decay=1e-3)
 
+    ml_model.to(device=device)
+
     # Training loop
     for epoch in tqdm(range(EPOCHS)):
         ml_model.train()
@@ -165,7 +170,7 @@ if __name__ == "__main__":
     model = VisionTransformer(
         image_size=64,
         patch_size=4,
-        embed_dim=16,
+        embed_dim=24,
         num_layers=8,
         num_heads=8,
         num_classes=10,

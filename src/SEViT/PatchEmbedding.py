@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from positionalEncoding import PositionalEncoding
-print(positionalEncoding)
+from utils import get_device
 
 
 class PatchEmbedding(nn.Module):
@@ -15,6 +15,7 @@ class PatchEmbedding(nn.Module):
             in_channels: The number of channels, defaults to 3 assuming RGB
         """
         super().__init__()
+        self.device = get_device()
         assert (image_size %
                 patch_size) == 0, "Image size not divisible by patch size"
         num_patches = (image_size // patch_size) ** 2
@@ -41,7 +42,7 @@ class PatchEmbedding(nn.Module):
         x = x.transpose(1, 2)
         cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat([cls_tokens, x], dim=1)
-        x = x + self.positional_embeddings.generate().unsqueeze(0)
+        x = x + self.positional_embeddings.generate().unsqueeze(0).to(self.device)
         return x
 
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from patchEmbedding import PatchEmbedding
-from transformerBlock import TransformerBlock
+from PatchEmbedding import PatchEmbedding
+from TransformerBlock import TransformerBlock
 
 
 class VisionTransformer(nn.Module):
@@ -14,17 +14,6 @@ class VisionTransformer(nn.Module):
                  num_layers: int,
                  num_classes: int,
                  in_channels: int = 3):
-        """
-        Initializes the Vision Transformer model
-        Args:
-            image_size: size of the input image
-            patch_size: size of a single patch
-            embed_dim: dimension of the embedding vectors
-            num_heads: number of heads in the transformer block
-            num_layers: number of transformer blocks
-            num_classes: number of output classes for classification
-            in_channels: number of channels in the input image, defaults to 3 for RGB
-        """
         super().__init__()
         self.patch_embedding = PatchEmbedding(
             image_size, patch_size, embed_dim, in_channels)
