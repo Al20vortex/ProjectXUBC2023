@@ -1,0 +1,7 @@
+wandb/
+mnist_data/
+src/SEConv/new_seconv.py
+src/SEConv/self_expanding_CNN.py
+src/SEConv/train.py
+src/SEConv/trial.py
+src/SEViT/

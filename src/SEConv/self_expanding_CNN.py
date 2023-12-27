@@ -7,12 +7,6 @@ from typing import List
 class IdentityConvLayer(nn.Module):
 
     def __init__(self, channels) -> None:
-        """
-        An identity Convolution Layer
-
-        Args:
-            channels (int): Number of Channels
-        """
         super().__init__()
         self.conv = nn.Conv2d(channels, channels,
                               kernel_size=1, padding=0, bias=False)
@@ -20,27 +14,11 @@ class IdentityConvLayer(nn.Module):
             channels).view(channels, channels, 1, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass baby
-
-        Args:
-            x (torch.Tensor): input tensor
-
-        Returns:
-            torch.Tensor: Output tensor
-        """
         return self.conv(x)
 
 
 class SelfExpandingCNN(nn.Module):
     def __init__(self, channels_list: List[int], n_classes: int) -> None:
-        """
-        A CNN class with self expanding capabilities
-
-        Args:
-            channels_list (list): The order of the number of channels in the layers 
-            n_classes (int): number of classes
-        """
         super().__init__()
         self.layers = nn.ModuleList()
         for i in range(len(channels_list) - 1):
@@ -54,15 +32,6 @@ class SelfExpandingCNN(nn.Module):
         self.fc = nn.Linear(fc_input_size, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass baby
-
-        Args:
-            x (torch.Tensor): input tensor
-
-        Returns:
-            torch.Tensor: output tensor
-        """
         for layer in self.layers:
             x = layer(x)
 
@@ -71,14 +40,10 @@ class SelfExpandingCNN(nn.Module):
         return x
 
     def add_identity_layer(self) -> None:
-        """
-        Adds a layer to the CNN. Called when the criteria is met
-        """
         for layer in reversed(self.layers):
             if isinstance(layer, nn.Conv2d):
                 channels = layer.out_channels
                 break
-        # channels = self.layers[-4].out_channels
         insert_index = len(self.layers) - 3
         identity_layer = IdentityConvLayer(channels)
         self.layers.insert(insert_index, identity_layer)
@@ -162,5 +127,6 @@ class SelfExpandingCNN(nn.Module):
             threshold (float): Threshold baby
         """
         score = self.compute_natural_expansion_score(dataloader, criterion)
+        print(f"Score: {score}")
         if score > threshold:
             self.add_identity_layer()
