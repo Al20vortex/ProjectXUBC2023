@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 from networks import *
 from networks.utils import emnist_train, emnist_val
 from networks.utils import train, get_device
+import copy
 
 device = get_device()
 
@@ -30,4 +31,43 @@ if __name__ == "__main__":
         expansion_threshold=2,
         epochs=EPOCHS
     )
-    print(model)
+    # print("****")
+    # print(model.convs)
+    # print("***")
+    # scores = []
+
+    # num_convs = len(model.convs)
+
+    # conv_block_indices = []
+    # for index, module in enumerate(model.convs):
+    #     if isinstance(module, ConvBlock):
+    #         conv_block_indices.append(index)
+
+    # print(conv_block_indices)
+    # print(f"Before addition:\n{model.convs} ")
+    # for index in conv_block_indices:
+    #     # temp_model = copy.deepcopy(model)
+    #     # print(f"CONVS: {model.convs[index]}")
+    #     # model.convs[index].add_layer()
+    #     print(f"expanding at index {index}")
+    #     model.expand(index)
+    #     print(model.convs)
+
+    # for index in conv_block_indices:
+    #     print(f"expanding again at index {index}")
+    #     model.expand(index)
+    #     print(model.convs)
+
+    # print("temp stuff")
+    # print(model.convs)
+    # del temp_model
+
+    # print(f"after addition: ")
+    # print(model.convs)
+    # print(model)
+    # print(f"Scores: {scores}")
+    # optimal_index = torch.argmax(torch.Tensor(scores))
+    # print(
+    #     f"Optimal Index: {optimal_index}, type: {type(optimal_index.item())}")
+    # a = torch.tensor([1, 2, 1.])
+    # print(torch.argmax(a).item())

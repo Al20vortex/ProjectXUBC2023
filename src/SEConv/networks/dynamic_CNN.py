@@ -115,6 +115,7 @@ class DynamicCNN(nn.Module):
 
     def expand(self, optimal_index: int) -> None:
         self.convs[optimal_index].add_layer()
+        # self.convs.add_layer(optimal_index)
 
     def needs_expansion(self, dataloader: DataLoader, threshold: float, criterion: nn.CrossEntropyLoss) -> bool:
         score = self.compute_natural_expansion_score(dataloader=dataloader,
@@ -137,13 +138,16 @@ class DynamicCNN(nn.Module):
             temp_model.convs[index].add_layer()
             new_score = temp_model.compute_natural_expansion_score(
                 dataloader, criterion)
-            scores.append(new_score)
+            # scores.append(new_score)
+            scores.append({
+                index: new_score
+            })
             del temp_model
         print(f"Scores: {scores}")
-        optimal_index = torch.argmax(torch.Tensor(scores))
-        print(
-            f"Optimal Index: {optimal_index}, type: {type(optimal_index.item())}")
-        return optimal_index.item()
+        max_dict = max(scores, key=lambda d: sum(d.values()))
+        optimal_index = list(max_dict)[0]  # torch.argmax(torch.Tensor(scores))
+        print(f"optimal_index: {optimal_index}")
+        return optimal_index
 
 
 if __name__ == "__main__":
