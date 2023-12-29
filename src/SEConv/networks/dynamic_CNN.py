@@ -95,8 +95,13 @@ class DynamicCNN(nn.Module):
                     natural_expansion_score += torch.sum(
                         param.grad ** 2 * fisher_inv)
 
-        # Normalizing by the number of data points(TODO: consider number of parameters?)
-        natural_expansion_score /= len(dataloader.dataset)
+        num_params = sum(p.numel()
+                         for p in self.parameters() if p.requires_grad)
+        print(f"num params: {num_params}")
+        print(f"np before div{natural_expansion_score}")
+        natural_expansion_score /= (len(dataloader) * num_params)
+        print(f"Natural expansion score: {natural_expansion_score}")
+
         # Setting back to train mode
         self.train()
         return natural_expansion_score.item()
@@ -106,16 +111,16 @@ class DynamicCNN(nn.Module):
                             criterion: nn.CrossEntropyLoss = nn.CrossEntropyLoss()):
         # breakpoint()
 
-        if self.needs_expansion(dataloader, threshold, criterion):
-            optimal_index = self.find_optimal_location(
-                dataloader=dataloader, threshold=threshold, criterion=criterion)
+        # if self.needs_expansion(dataloader, threshold, criterion):
+        optimal_index = self.find_optimal_location(
+            dataloader=dataloader, threshold=threshold, criterion=criterion)
+        if optimal_index is not None:
             print("adding layer")
             self.expand(optimal_index)
             print("added layer")
 
     def expand(self, optimal_index: int) -> None:
         self.convs[optimal_index].add_layer()
-        # self.convs.add_layer(optimal_index)
 
     def needs_expansion(self, dataloader: DataLoader, threshold: float, criterion: nn.CrossEntropyLoss) -> bool:
         score = self.compute_natural_expansion_score(dataloader=dataloader,
@@ -126,6 +131,9 @@ class DynamicCNN(nn.Module):
         scores = []
 
         num_convs = len(self.convs)
+        ##
+        current_score = self.compute_natural_expansion_score(
+            dataloader=dataloader, criterion=criterion)
 
         conv_block_indices = []
         for index, module in enumerate(self.convs):
@@ -138,14 +146,17 @@ class DynamicCNN(nn.Module):
             temp_model.convs[index].add_layer()
             new_score = temp_model.compute_natural_expansion_score(
                 dataloader, criterion)
-            # scores.append(new_score)
-            scores.append({
-                index: new_score
-            })
+            if (new_score/current_score) > threshold:
+                scores.append({
+                    index: new_score
+                })
             del temp_model
         print(f"Scores: {scores}")
-        max_dict = max(scores, key=lambda d: sum(d.values()))
-        optimal_index = list(max_dict)[0]  # torch.argmax(torch.Tensor(scores))
+        if scores:
+            max_dict = max(scores, key=lambda d: sum(d.values()))
+            optimal_index = list(max_dict)[0]
+        else:
+            optimal_index = None
         print(f"optimal_index: {optimal_index}")
         return optimal_index
 
