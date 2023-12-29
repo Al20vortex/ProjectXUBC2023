@@ -46,6 +46,11 @@ def train(model,
         train_loss /= len(train_loader)
         train_accuracy = 100 * train_correct / train_total
 
+        wandb.log({
+            "train_loss": train_loss,
+            "train_accuracy": train_accuracy
+        })
+
         val_loss, val_correct, val_total = 0, 0, 0
         model.eval()
         with torch.no_grad():
@@ -62,7 +67,7 @@ def train(model,
         val_loss /= len(val_loader)
         val_accuracy = 100 * val_correct / val_total
 
-        model.expand_if_necessary(train_loader, expansion_threshold, criterion)
+        # model.expand_if_necessary(train_loader, expansion_threshold, criterion)
         # model.expand_if_necessary(dataloader = train_loader)
 
         history['train_loss'].append(train_loss)
@@ -70,10 +75,15 @@ def train(model,
         history['train_accuracy'].append(train_accuracy)
         history['val_accuracy'].append(val_accuracy)
 
+        # print(type(train_loss))
+        # print(type(train_accuracy))
+        # print(type(val_loss))
+        # print(type(val_accuracy))
+
         wandb.log({
-            "train_loss": train_loss,
+            # "train_loss": train_loss,
             "validation_loss": val_loss,
-            "train_accuracy": train_accuracy,
+            # "train_accuracy": train_accuracy,
             "validation_accuracy": val_accuracy
         })
 
