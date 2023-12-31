@@ -13,7 +13,9 @@ def train(model,
     device = get_device()
     model = model.to(device)
 
-    optimizer = torch.optim.Adam(model.parameters())
+    LEARNING_RATE = 4e-3
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
     criterion = nn.CrossEntropyLoss()
 
     history = {
@@ -67,7 +69,9 @@ def train(model,
         val_loss /= len(val_loader)
         val_accuracy = 100 * val_correct / val_total
 
-        # model.expand_if_necessary(train_loader, expansion_threshold, criterion)
+        if (epoch % 2) == 0:
+            model.expand_if_necessary(
+                train_loader, expansion_threshold, criterion)
         # model.expand_if_necessary(dataloader = train_loader)
 
         history['train_loss'].append(train_loss)
