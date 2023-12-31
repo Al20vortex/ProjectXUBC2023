@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 
 device = get_device()
 
-BATCH_SIZE = 32
-EPOCHS = 20
-print(emnist_train[0][0].shape)
+BATCH_SIZE = 400
+EPOCHS = 100
+# print(emnist_train[0][0].shape)
 train_loader = DataLoader(emnist_train, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(emnist_val, batch_size=BATCH_SIZE, shuffle=False)
 
@@ -21,7 +21,7 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [1, 8, 8]
+channels_list = [3, 8, 8]
 n_classes = 10
 model = DynamicCNN(channels_list=channels_list, n_classes=10)
 criterion = nn.CrossEntropyLoss()
@@ -36,21 +36,21 @@ def imshow(img):
 
 
 if __name__ == "__main__":
-    images, labels = next(iter(cifar_test_loader))
-    print(f"cifar_shape: {images[0].shape}")
-    imshow(images[0])
+    # images, labels = next(iter(cifar_test_loader))
+    # print(f"cifar_shape: {images[0].shape}")
+    # imshow(images[0])
     # print(cifar_test[0])
     # print(cifar_test_loader)
 
     # ___
-    # model = DynamicCNN(channels_list, 10, 0.2)
-    # history = train(
-    #     model=model,
-    #     train_loader=cifar_train_loader,
-    #     val_loader=cifar_test_loader,
-    #     expansion_threshold=1.5,
-    #     epochs=EPOCHS
-    # )
+    model = DynamicCNN(channels_list, 10, 0.2)
+    history = train(
+        model=model,
+        train_loader=cifar_train_loader,
+        val_loader=cifar_test_loader,
+        expansion_threshold=0.8,  # 1.5,
+        epochs=EPOCHS
+    )
     # ___
     # print("****")
     # print(model.convs)
