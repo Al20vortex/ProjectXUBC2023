@@ -29,6 +29,7 @@ class DynamicCNN(nn.Module):
         self.convs = nn.ModuleList(blocks)
         self.fc = nn.Sequential(
             MLP(90, 20, dropout=dropout),
+            nn.BatchNorm1d(20),
             MLP(20, out_features=n_classes, dropout=dropout, is_output_layer=True)
         )
         self.one_by_one_conv = nn.Sequential(
@@ -146,6 +147,7 @@ class DynamicCNN(nn.Module):
             temp_model.convs[index].add_layer()
             new_score = temp_model.compute_natural_expansion_score(
                 dataloader, criterion)
+            print(f"score at index {index}: {new_score}")
             if (new_score/current_score) > threshold:
                 scores.append({
                     index: new_score
