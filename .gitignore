@@ -7,4 +7,4 @@ src/SEConv/trial.py
 src/SEViT/
 cifar_test/
 cifar_train/
-src\SEConvRefactored\__pycache__
+src/SEConvRefactored/__pycache__
