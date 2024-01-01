@@ -10,14 +10,14 @@ import random
 import copy
 
 # Define our hyperparameters
-INPUT_SHAPE = (3, 64, 64)
-OUTPUT_SHAPE = (1,)
+INPUT_SHAPE = (3, 32, 32)
+OUTPUT_SHAPE = (10,)
 POSSIBLE_SINGLE_MODULES = [nn.Conv2d]  # TODO ADD MORE
 POSSIBLE_PAIR_MODULES = [nn.MaxPool2d]  # TODO ADD MORE, like CONV2d TRANSPOSE
-TAU = 10.0
+TAU = 1.0
 EPOCHS = 1000
 LEARNING_RATE = 1e-3
-BATCH_SIZE = 256
+BATCH_SIZE = 1024
 FIXED_OUTPUT_CHANNELS = 16
 L1_REG = 1e-4
 
@@ -182,61 +182,38 @@ class NeuralNet(nn.Module):
         for layer in self.layers:
             x = layer(x)
         x = self.out(x)
-        return x.view(x.size(0))    
+        return x
     
-    def compute_fisher_information(self, dataloader: torch.Tensor, criterion: torch.Tensor) -> dict:
-        """
-        Computes the fisher matrix
-
-        Args:
-            dataloader (torch.Tensor): The dataloader
-            criterion (torch.Tensor): The criterion. 
-
-        Returns:
-            dict: The fisher information
-        """
+    def compute_fisher_information(self, dataloader, criterion) -> dict:
         fisher_information = {}
         for name, param in self.named_parameters():
             fisher_information[name] = torch.zeros_like(param)
 
         self.eval()
         for inputs, labels in dataloader:
-            inputs, labels = inputs.to(device).float(), labels.to(device).float()
+            inputs, labels = inputs.to(get_device()), labels.to(get_device())
             outputs = self(inputs)
             loss = criterion(outputs, labels)
-
             self.zero_grad()
             loss.backward()
 
             for name, param in self.named_parameters():
                 if param.grad is not None:
-                    fisher_information[name] += (param.grad **
-                                                    2) / len(dataloader)
+                    fisher_information[name] += param.grad.pow(
+                        2) / len(dataloader)
+        self.train()
         return fisher_information
-    
-    def compute_natural_expansion_score(self, dataloader: torch.Tensor, criterion: torch.Tensor) -> float:
-        """
-        Computes the natural expansion score as per the paper SelfExpandinNeuralNetworks
 
-        Args:
-            dataloader (torch.Tensor): The dataloader baby
-            criterion (torch.Tensor): The criterion baby
-
-        Returns:
-            float: The score baby
-        """
+    def compute_natural_expansion_score(self, dataloader, criterion) -> float:
         fisher_information = self.compute_fisher_information(
             dataloader, criterion)
-
         natural_grad_approx = 0
-        num_params = self.count_parameters()
         for name, param in self.named_parameters():
             if param.grad is not None and name in fisher_information:
                 fisher_diag = fisher_information[name]
-                natural_grad_approx += (param.grad **
-                                        2 / (fisher_diag + 1e-5)).sum()
-        return natural_grad_approx.item() / num_params # TODO do we need to have this num_params
-
+                natural_grad_approx += (param.grad.pow(2) /
+                                        (fisher_diag + 1e-5)).sum()
+        return natural_grad_approx.item()
 
 def identity_conv_init(conv_layer):
     """
@@ -271,8 +248,10 @@ transform = transforms.Compose([
 ])
 
 # Load the datasets
-train_dataset = datasets.ImageFolder('llama-duck-ds/train', transform=transform)
-val_dataset = datasets.ImageFolder('llama-duck-ds/val', transform=transform)
+# train_dataset = datasets.ImageFolder('llama-duck-ds/train', transform=transform)
+# val_dataset = datasets.ImageFolder('llama-duck-ds/val', transform=transform)
+train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
 
 # Data loaders
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
@@ -479,7 +458,7 @@ def adapt_subsequent_layer(model, upgrade_position):
 
 def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    loss_fun = nn.BCEWithLogitsLoss()
+    loss_fun = nn.CrossEntropyLoss()
 
     model.train()  # Set the model to training mode
     correct_train = 0
@@ -487,11 +466,10 @@ def train():
 
     for epoch in range(0, EPOCHS):
         for input, target in train_loader:  
-            input, target = input.to(device).float(), target.to(device).float()
-            optimizer.zero_grad()
+            input, target = input.to(device).float(), target.to(device)  # target is not converted to float            optimizer.zero_grad()
             output = model(input)
             loss = loss_fun(output, target)
-            predicted = torch.sigmoid(output).round()  # Getting the binary predictions
+            predicted = output.argmax(dim=1)  # Use argmax to get the predicted class
             correct_train += (predicted == target).sum().item()
             total_train += target.size(0)
             loss.backward()
@@ -504,12 +482,12 @@ def train():
         total_val = 0
         val_loss_total = 0
         for val_input, val_target in val_loader:  
-            val_input, val_target = val_input.to(device).float(), val_target.to(device).float()
+            val_input, val_target = val_input.to(device).float(), val_target.to(device)
             optimizer.zero_grad()
             val_output = model(val_input)
             val_loss = loss_fun(val_output, val_target)
             val_loss_total += val_loss.item()
-            predicted_val = torch.sigmoid(val_output).round()
+            predicted_val = val_output.argmax(dim=1)  # Use argmax to get the predicted class
             correct_val += (predicted_val == val_target).sum().item()
             total_val += val_target.size(0)
 
