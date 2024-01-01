@@ -13,8 +13,10 @@ device = get_device()
 
 BATCH_SIZE = 512
 EPOCHS = 100
+LEARNING_RATE = 4e-3
 
 image_size = 32
+
 train_transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
     transforms.RandomHorizontalFlip(),
@@ -38,26 +40,25 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [3, 8, 8]
+channels_list = [3, 64, 128]
 n_classes = 10
-model = DynamicCNN(channels_list=channels_list, n_classes=10)
+model = DynamicCNN(channels_list=channels_list, n_classes=10).to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
+# TODO create a config object where user can set the initial conditions
+config = {
+    "use_pooling": True,
+    "use_strided_conv": False,
+    "channels_list": channels_list
+}
 
-def imshow(img):
-    img = img / 2 + 0.5  # unnormalize if necessary
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    plt.show()
-
-
-if __name__ == "__main__":
-    model = DynamicCNN(channels_list, 10, 0.2)
-    history = train(
-        model=model,
-        train_loader=cifar_train_loader,
-        val_loader=cifar_test_loader,
-        expansion_threshold=0.8,  # 1.5,
-        epochs=EPOCHS
-    )
+history = train(
+    model=model,
+    optimizer=optimizer,
+    criterion=criterion,
+    train_loader=cifar_train_loader,
+    val_loader=cifar_test_loader,
+    expansion_threshold=0.8,  # 1.5,
+    epochs=EPOCHS
+)

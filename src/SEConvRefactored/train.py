@@ -3,8 +3,11 @@ import wandb
 import torch
 from tqdm import tqdm
 from utils import get_device
+from DynamicCNN import DynamicCNN
 
-def train(model,
+def train(model: DynamicCNN,
+          optimizer,
+          criterion,
           train_loader,
           val_loader,
           epochs,
@@ -12,10 +15,10 @@ def train(model,
     device = get_device()
     model = model.to(device)
 
-    LEARNING_RATE = 4e-3
+    # LEARNING_RATE = 4e-3
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    criterion = nn.CrossEntropyLoss()
+    # optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    # criterion = nn.CrossEntropyLoss()
 
     history = {
         "train_loss": [],

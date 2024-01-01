@@ -37,7 +37,7 @@ class IdentityConvLayer(nn.Module):
         conv = nn.Conv2d(channels, channels,
                          kernel_size=3, padding="same", bias=False)
         identity_matrix = torch.eye(channels).view(channels, channels, 1, 1)
-        print("Identity matrix type: ", identity_matrix.type())
+        # print("Identity matrix type: ", identity_matrix.type())
         with torch.no_grad():
             conv.weight.copy_(identity_matrix)
         self.conv = nn.Sequential(conv,
@@ -172,10 +172,10 @@ class DynamicCNN(nn.Module):
 
         num_params = sum(p.numel()
                          for p in self.parameters() if p.requires_grad)
-        print(f"num params: {num_params}")
-        print(f"np before div{natural_expansion_score}")
+        # print(f"num params: {num_params}")
+        # print(f"np before div{natural_expansion_score}")
         natural_expansion_score /= (len(dataloader) * num_params)
-        print(f"Natural expansion score: {natural_expansion_score}")
+        # print(f"Natural expansion score: {natural_expansion_score}")
 
         # Setting back to train mode
         self.train()
@@ -184,9 +184,6 @@ class DynamicCNN(nn.Module):
     def expand_if_necessary(self, dataloader: DataLoader,
                             threshold: float,
                             criterion: nn.CrossEntropyLoss = nn.CrossEntropyLoss()):
-        # breakpoint()
-
-        # if self.needs_expansion(dataloader, threshold, criterion):
         optimal_index = self.find_optimal_location(
             dataloader=dataloader, threshold=threshold, criterion=criterion)
         if optimal_index is not None:
@@ -214,21 +211,21 @@ class DynamicCNN(nn.Module):
 
         for index in conv_block_indices:  # range(num_convs-1):
             temp_model = copy.deepcopy(self)
-            print(f"CONVS: {temp_model.convs[index]}")
+            # print(f"CONVS: {temp_model.convs[index]}")
             temp_model.convs[index].add_layer()
             new_score = temp_model.compute_natural_expansion_score(
                 dataloader, criterion)
-            print(f"score at index {index}: {new_score}")
+            # print(f"score at index {index}: {new_score}")
             if (new_score/current_score) > threshold:
                 scores.append({
                     index: new_score
                 })
             del temp_model
-        print(f"Scores: {scores}")
+        # print(f"Scores: {scores}")
         if scores:
             max_dict = max(scores, key=lambda d: sum(d.values()))
             optimal_index = list(max_dict)[0]
         else:
             optimal_index = None
-        print(f"optimal_index: {optimal_index}")
+        # print(f"optimal_index: {optimal_index}")
         return optimal_index
