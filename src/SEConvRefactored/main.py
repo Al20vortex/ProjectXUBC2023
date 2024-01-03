@@ -14,6 +14,7 @@ device = get_device()
 BATCH_SIZE = 512
 EPOCHS = 100
 LEARNING_RATE = 4e-3
+UPGRADE_FACTOR = 1.5
 
 image_size = 32
 
@@ -40,7 +41,7 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [3, 64, 128]
+channels_list = [3, 16, 32]
 n_classes = 10
 model = DynamicCNN(channels_list=channels_list, n_classes=10).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -59,6 +60,7 @@ history = train(
     criterion=criterion,
     train_loader=cifar_train_loader,
     val_loader=cifar_test_loader,
-    expansion_threshold=0.8,  # 1.5,
-    epochs=EPOCHS
+    expansion_threshold=2.0,
+    epochs=EPOCHS,
+    upgrade_factor = UPGRADE_FACTOR
 )

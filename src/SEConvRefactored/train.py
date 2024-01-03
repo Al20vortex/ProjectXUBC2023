@@ -10,8 +10,10 @@ def train(model: DynamicCNN,
           criterion,
           train_loader,
           val_loader,
+          expansion_threshold,
           epochs,
-          expansion_threshold) -> dict:
+          upgrade_factor
+          ) -> dict:
     device = get_device()
     model = model.to(device)
 
@@ -73,7 +75,7 @@ def train(model: DynamicCNN,
 
         if (epoch % 2) == 0:
             model.expand_if_necessary(
-                train_loader, expansion_threshold, criterion)
+                train_loader, expansion_threshold, criterion, upgrade_factor)
         # model.expand_if_necessary(dataloader = train_loader)
 
         history['train_loss'].append(train_loss)

@@ -83,6 +83,9 @@ class ConvBlock(nn.Module):
             self.convs.append(new_layer)
             self.count += 1
 
+    def upgrade_block(self):
+        pass # TODO implement!
+
 
 class DynamicCNN(nn.Module):
     def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0.) -> None:
@@ -180,26 +183,59 @@ class DynamicCNN(nn.Module):
         # Setting back to train mode
         self.train()
         return natural_expansion_score.item()
+    
+    def find_optimal_action(self, dataloader: DataLoader, threshold: float, upgrade_factor: float, criterion: nn.CrossEntropyLoss) -> Union[str, int]:
+        best_score = 0
+        best_action = None
+        best_index = None
+        current_score = self.compute_natural_expansion_score(dataloader=dataloader, criterion=criterion)
 
-    def expand_if_necessary(self, dataloader: DataLoader,
+        # Evaluate adding new layers
+        for index, module in enumerate(self.convs):
+            if isinstance(module, ConvBlock):
+                temp_model = copy.deepcopy(self)
+                temp_model.convs[index].add_layer()
+                new_score = temp_model.compute_natural_expansion_score(dataloader, criterion)
+                if (new_score/current_score) > threshold and new_score > best_score:
+                    best_score = new_score
+                    best_action = "add_layer"
+                    best_index = index
+                del temp_model
+
+        # Evaluate upgrading existing blocks
+        for index, module in enumerate(self.convs):
+            if isinstance(module, ConvBlock):
+                temp_model = copy.deepcopy(self)
+                temp_model.convs[index].upgrade_block()  # Placeholder for actual upgrade logic
+                new_score = temp_model.compute_natural_expansion_score(dataloader, criterion)
+                if (new_score/current_score) > upgrade_factor and new_score > best_score:
+                    best_score = new_score
+                    best_action = "upgrade_block"
+                    best_index = index
+                del temp_model
+
+        return best_action, best_index
+    
+    def expand_if_necessary(self, 
+                            dataloader: DataLoader,
                             threshold: float,
-                            criterion: nn.CrossEntropyLoss = nn.CrossEntropyLoss()):
-        optimal_index = self.find_optimal_location(
-            dataloader=dataloader, threshold=threshold, criterion=criterion)
-        if optimal_index is not None:
-            print("adding layer")
-            self.expand(optimal_index)
-            print("added layer")
+                            criterion: nn.CrossEntropyLoss = nn.CrossEntropyLoss(),
+                            upgrade_factor = 1.5):
+        optimal_action, optimal_index = self.find_optimal_action(
+            dataloader=dataloader, threshold=threshold, upgrade_factor=upgrade_factor, criterion=criterion)
+        if optimal_action == "add_layer":
+            print("Adding layer at index", optimal_index)
+            self.convs[optimal_index].add_layer()
+        elif optimal_action == "upgrade_block":
+            print("Upgrading block at index", optimal_index)
+            self.convs[optimal_index].upgrade_block()
+        else:
+            print("No expansion or upgrade necessary at this time")
 
     def expand(self, optimal_index: int) -> None:
         self.convs[optimal_index].add_layer()
 
-    def needs_expansion(self, dataloader: DataLoader, threshold: float, criterion: nn.CrossEntropyLoss) -> bool:
-        score = self.compute_natural_expansion_score(dataloader=dataloader,
-                                                     criterion=criterion)
-        return score > threshold
-
-    def find_optimal_location(self, dataloader: DataLoader, threshold: float, criterion: nn.CrossEntropyLoss) -> int:
+    def find_optimal_location(self, dataloader: DataLoader, threshold: float, upgrade_factor: float, criterion: nn.CrossEntropyLoss) -> int:
         scores = []
         current_score = self.compute_natural_expansion_score(
             dataloader=dataloader, criterion=criterion)
@@ -216,16 +252,21 @@ class DynamicCNN(nn.Module):
             new_score = temp_model.compute_natural_expansion_score(
                 dataloader, criterion)
             # print(f"score at index {index}: {new_score}")
+            print("Threshold: ", threshold)
+            print("new_score/current_score: ", new_score/current_score)
             if (new_score/current_score) > threshold:
                 scores.append({
                     index: new_score
                 })
             del temp_model
-        # print(f"Scores: {scores}")
+        # Here calculate natural expansion scores for upgrading the blocks.
+        
+            
         if scores:
             max_dict = max(scores, key=lambda d: sum(d.values()))
             optimal_index = list(max_dict)[0]
         else:
             optimal_index = None
         # print(f"optimal_index: {optimal_index}")
+        print("Scores: ", scores)
         return optimal_index
