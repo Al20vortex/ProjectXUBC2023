@@ -2,7 +2,7 @@ import torch.nn as nn
 import wandb
 import torch
 from tqdm import tqdm
-from utils import get_device
+from utils import get_device, count_parameters
 from DynamicCNN import DynamicCNN
 
 def train(model: DynamicCNN,
@@ -26,7 +26,8 @@ def train(model: DynamicCNN,
         "train_loss": [],
         "val_loss": [],
         "train_accuracy": [],
-        "val_accuracy": []
+        "val_accuracy": [],
+        "num_parameters": []
     }
 
     wandb.login()
@@ -52,11 +53,6 @@ def train(model: DynamicCNN,
         train_loss /= len(train_loader)
         train_accuracy = 100 * train_correct / train_total
 
-        wandb.log({
-            "train_loss": train_loss,
-            "train_accuracy": train_accuracy
-        })
-
         val_loss, val_correct, val_total = 0, 0, 0
         model.eval()
         with torch.no_grad():
@@ -73,21 +69,23 @@ def train(model: DynamicCNN,
         val_loss /= len(val_loader)
         val_accuracy = 100 * val_correct / val_total
 
-        if (epoch % 2) == 0:
-            model.expand_if_necessary(
-                train_loader, expansion_threshold, criterion, upgrade_factor)
-        # model.expand_if_necessary(dataloader = train_loader)
+        # if (epoch % 2) == 0:
+        model.expand_if_necessary(
+            train_loader, expansion_threshold, criterion, upgrade_factor)
 
+        num_params = count_parameters(model)
         history['train_loss'].append(train_loss)
         history['val_loss'].append(val_loss)
         history['train_accuracy'].append(train_accuracy)
         history['val_accuracy'].append(val_accuracy)
+        history['num_parameters'].append(num_params)
 
         wandb.log({
-            # "train_loss": train_loss,
+            "train_loss": train_loss,
             "validation_loss": val_loss,
-            # "train_accuracy": train_accuracy,
-            "validation_accuracy": val_accuracy
+            "train_accuracy": train_accuracy,
+            "validation_accuracy": val_accuracy,
+            "num_params": num_params
         })
 
         print(f'Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f}, '

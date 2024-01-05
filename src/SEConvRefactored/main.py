@@ -41,9 +41,9 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [3, 16, 32]
+channels_list = [3, 8, 8]
 n_classes = 10
-model = DynamicCNN(channels_list=channels_list, n_classes=10).to(device)
+model = DynamicCNN(channels_list=channels_list, n_classes=n_classes).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
 
