@@ -60,7 +60,7 @@ history = train(
     criterion=criterion,
     train_loader=cifar_train_loader,
     val_loader=cifar_test_loader,
-    expansion_threshold=2.0,
+    expansion_threshold=1.50,
     epochs=EPOCHS,
     upgrade_factor = UPGRADE_FACTOR
 )

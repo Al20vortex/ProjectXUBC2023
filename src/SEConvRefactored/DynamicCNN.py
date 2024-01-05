@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import List, Union
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
 import copy
 from utils import check_network_consistency, get_device
@@ -123,7 +123,7 @@ class DynamicCNN(nn.Module):
         x = self.fc(x)
         return x
 
-    def compute_fisher_information(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss, subset_size: int = 100):
+    def compute_fisher_information(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss):
         fisher_information = {}
         for name, param in self.named_parameters():
             fisher_information[name] = torch.zeros_like(param)
@@ -291,7 +291,12 @@ class DynamicCNN(nn.Module):
         best_score = 0
         best_action = None
         best_index = None
-        current_score = self.compute_natural_expansion_score(dataloader=dataloader, criterion=criterion)
+        subset_indices = range(128)  # Adjust the range as needed
+        subset = Subset(dataloader.dataset, subset_indices)
+
+        # Compute natural expansion score using only a subset of the full train set
+        subset_dataloader = DataLoader(subset, batch_size=dataloader.batch_size, shuffle=True)
+        current_score = self.compute_natural_expansion_score(dataloader=subset_dataloader, criterion=criterion)
 
         # Evaluate adding new layers
         for index, module in enumerate(self.convs):
@@ -311,7 +316,7 @@ class DynamicCNN(nn.Module):
                 temp_model = copy.deepcopy(self)
                 temp_model.upgrade_block(index, upgrade_factor)
                 new_score = temp_model.compute_natural_expansion_score(dataloader, criterion)
-                if (new_score/current_score) > upgrade_factor and new_score > best_score:
+                if (new_score/current_score) > threshold and new_score > best_score:
                     best_score = new_score
                     best_action = "upgrade_block"
                     best_index = index
