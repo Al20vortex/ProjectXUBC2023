@@ -22,7 +22,6 @@ train_transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
     transforms.RandomHorizontalFlip(),
     transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1)), # Random affine transformation
-    transforms.ElasticTransform(alpha=[20.0, 20.0], sigma=[5.0, 5.0]), # maybe remove
     transforms.ToTensor(),
     transforms.Normalize(mean=0.5, std=0.25)
 ])
