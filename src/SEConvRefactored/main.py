@@ -21,6 +21,8 @@ image_size = 32
 train_transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
     transforms.RandomHorizontalFlip(),
+    transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1)), # Random affine transformation
+    transforms.ElasticTransform(alpha=[20.0, 20.0], sigma=[5.0, 5.0]), # maybe remove
     transforms.ToTensor(),
     transforms.Normalize(mean=0.5, std=0.25)
 ])
@@ -41,7 +43,7 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [3, 8, 8]
+channels_list = [3, 8, 8, 8]
 n_classes = 10
 model = DynamicCNN(channels_list=channels_list, n_classes=n_classes).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -60,7 +62,7 @@ history = train(
     criterion=criterion,
     train_loader=cifar_train_loader,
     val_loader=cifar_test_loader,
-    expansion_threshold=1.50,
+    expansion_threshold=2.0,
     epochs=EPOCHS,
     upgrade_factor = UPGRADE_FACTOR
 )

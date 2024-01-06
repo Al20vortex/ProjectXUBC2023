@@ -5,7 +5,6 @@ from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
 import copy
 from utils import check_network_consistency, get_device
-from torchviz import make_dot
 
 device = get_device()
 
@@ -70,7 +69,7 @@ class ConvBlock(nn.Module):
             ]
         )
         self.convs = nn.ModuleList(convs)
-        self.device = get_device()
+        self.device = device
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for layer in self.convs:
@@ -92,7 +91,7 @@ class DynamicCNN(nn.Module):
         blocks = []
         self.n_classes = n_classes
         self.dropout = dropout
-        self.device = get_device()
+        self.device = device
 
         for i in range(len(channels_list)-1):
             blocks.extend([ConvBlock(in_channels=channels_list[i],
@@ -103,7 +102,7 @@ class DynamicCNN(nn.Module):
 
         self.convs = nn.ModuleList(blocks)
         self.fc = nn.Sequential(
-            MLP(640, 20, dropout=dropout), #TODO dynamically calculate MLP dims
+            MLP(160, 20, dropout=dropout), #TODO dynamically calculate MLP dims
             nn.BatchNorm1d(20),
             MLP(20, out_features=n_classes, dropout=dropout, is_output_layer=True)
         )
@@ -291,10 +290,10 @@ class DynamicCNN(nn.Module):
         best_score = 0
         best_action = None
         best_index = None
-        subset_indices = range(128)  # Adjust the range as needed
-        subset = Subset(dataloader.dataset, subset_indices)
 
         # Compute natural expansion score using only a subset of the full train set
+        subset_indices = range(512)  # Adjust the range as needed
+        subset = Subset(dataloader.dataset, subset_indices)
         subset_dataloader = DataLoader(subset, batch_size=dataloader.batch_size, shuffle=True)
         current_score = self.compute_natural_expansion_score(dataloader=subset_dataloader, criterion=criterion)
 
@@ -303,7 +302,7 @@ class DynamicCNN(nn.Module):
             if isinstance(module, ConvBlock):
                 temp_model = copy.deepcopy(self)
                 temp_model.convs[index].add_layer()
-                new_score = temp_model.compute_natural_expansion_score(dataloader, criterion)
+                new_score = temp_model.compute_natural_expansion_score(subset_dataloader, criterion)
                 if (new_score/current_score) > threshold and new_score > best_score:
                     best_score = new_score
                     best_action = "add_layer"
@@ -315,7 +314,7 @@ class DynamicCNN(nn.Module):
             if isinstance(module, ConvBlock):
                 temp_model = copy.deepcopy(self)
                 temp_model.upgrade_block(index, upgrade_factor)
-                new_score = temp_model.compute_natural_expansion_score(dataloader, criterion)
+                new_score = temp_model.compute_natural_expansion_score(subset_dataloader, criterion)
                 if (new_score/current_score) > threshold and new_score > best_score:
                     best_score = new_score
                     best_action = "upgrade_block"
