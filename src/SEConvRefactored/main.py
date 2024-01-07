@@ -14,7 +14,7 @@ device = get_device()
 BATCH_SIZE = 512
 EPOCHS = 1000
 LEARNING_RATE = 1e-2
-UPGRADE_AMT = 8
+UPGRADE_AMT = 2
 
 image_size = 32
 
