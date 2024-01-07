@@ -68,7 +68,6 @@ def train(model: DynamicCNN,
 
         model.expand_if_necessary(
             train_loader, expansion_threshold, criterion, upgrade_amount)
-        
         optimizer = torch.optim.Adam(model.parameters(), lr=initial_lr)  # Reinitialize optimizer
 
         # Calculate the scaling factor for the learning rate

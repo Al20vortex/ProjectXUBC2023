@@ -13,7 +13,7 @@ device = get_device()
 
 BATCH_SIZE = 512
 EPOCHS = 1000
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 4e-3
 UPGRADE_AMT = 2
 
 image_size = 32
@@ -45,7 +45,7 @@ cifar_test_loader = DataLoader(
 channels_list = [3, 16, 32]
 n_classes = 10
 model = DynamicCNN(channels_list=channels_list, n_classes=n_classes).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=[0.9, 0.9])
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
 
 # TODO create a config object where user can set the initial conditions

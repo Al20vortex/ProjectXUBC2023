@@ -82,7 +82,7 @@ class ConvBlock(nn.Module):
         return x
     
     def add_layer(self):
-        if self.count < 3:
+        if self.count < 6:
             new_layer = IdentityConvLayer(
                 channels=self.out_channels).to(self.device)
             self.convs.insert(len(self.convs)-2, new_layer)
@@ -137,62 +137,6 @@ class DynamicCNN(nn.Module):
         x = self.fc(x)
         return x
     
-    # def compute_fisher_information(self,
-    #                                dataloader: DataLoader,
-    #                                criterion: nn.CrossEntropyLoss):
-    #     fisher_information = {}
-
-    #     for name, param in self.named_parameters():
-    #         fisher_information[name] = torch.zeros_like(param)
-
-    #     self.eval()
-    #     for inputs, labels in dataloader:
-    #         inputs, labels = inputs.to(self.device), labels.to(self.device)
-    #         outputs = self(inputs)
-    #         loss = criterion(outputs, labels)
-    #         self.zero_grad()
-    #         loss.backward()
-
-    #         for name, param in self.named_parameters():
-    #             if param.grad is not None:
-    #                 fisher_information[name] += param.grad.pow(
-    #                     2) / len(dataloader)
-    #     self.train()
-    #     return fisher_information
-
-    # def compute_natural_expansion_score(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss):
-    #     fisher_information = self.compute_fisher_information(dataloader,
-    #                                                          criterion)
-    #     natural_expansion_score = 0.0
-    #     # Setting to eval mode
-    #     self.eval()
-    #     for inputs, labels in dataloader:
-    #         inputs, labels = inputs.to(self.device), labels.to(self.device)
-    #         outputs = self(inputs)
-    #         loss = criterion(outputs, labels)
-
-    #         self.zero_grad()
-    #         loss.backward()
-
-    #         # Accumulate the natural expansion score
-    #         for name, param in self.named_parameters():
-    #             if param.grad is not None and name in fisher_information:
-    #                 # Fisher inverse component for this parameter
-    #                 fisher_inv = 1.0 / (fisher_information[name] + 1e-5)
-
-    #                 # Updating the natural expansion scrore
-    #                 # score = g^T * F^(-1) * g = g**2 *F^(-1)
-    #                 natural_expansion_score += torch.sum(
-    #                     param.grad ** 2 * fisher_inv)
-
-    #     num_params = sum(p.numel()
-    #                      for p in self.parameters() if p.requires_grad)
-    #     natural_expansion_score /= (len(dataloader) * num_params)
-
-    #     # Setting back to train mode
-    #     self.train()
-    #     return natural_expansion_score.item()
-
     def compute_fisher_information(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss):
         fisher_information = {name: torch.zeros_like(param) for name, param in self.named_parameters()}
 
@@ -207,7 +151,7 @@ class DynamicCNN(nn.Module):
 
             for name, param in self.named_parameters():
                 if param.grad is not None:
-                    fisher_information[name] += param.grad.pow(2) / len(dataloader)
+                    fisher_information[name] += param.grad.pow(2)
 
         self.train()
         return fisher_information
@@ -230,11 +174,11 @@ class DynamicCNN(nn.Module):
                 if param.grad is not None and name in fisher_information:
                     fisher_inv = 1.0 / (fisher_information[name] + 1e-5)
                     natural_expansion_score += torch.sum(param.grad ** 2 * fisher_inv)
-        natural_expansion_score /= (len(dataloader) * num_params)
+        natural_expansion_score /= num_params
 
         self.train()
         return natural_expansion_score.item()
-        
+
     def upgrade_block(self, index, upgrade_amount):
         block = self.convs[index]
         new_out_channels = int(block.out_channels + upgrade_amount)
@@ -400,7 +344,7 @@ class DynamicCNN(nn.Module):
                             dataloader: DataLoader,
                             threshold: float,
                             criterion: nn.CrossEntropyLoss = nn.CrossEntropyLoss(),
-                            upgrade_amount = 8):
+                            upgrade_amount = 2):
         optimal_action, optimal_index = self.find_optimal_action(
             dataloader=dataloader, threshold=threshold, upgrade_amount=upgrade_amount, criterion=criterion)
         if optimal_action == "add_layer":
