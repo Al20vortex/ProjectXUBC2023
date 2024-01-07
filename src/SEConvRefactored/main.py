@@ -42,9 +42,9 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [3, 16, 16, 16]
+channels_list = [3, 32, 16, 16]
 n_classes = 10
-model = DynamicCNN(channels_list=channels_list, 
+model = DynamicCNN(channels_list=channels_list,
                    n_classes=n_classes, 
                    image_size=image_size, 
                    pooling_stride=2).to(device)

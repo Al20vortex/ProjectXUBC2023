@@ -8,7 +8,7 @@ from utils import check_network_consistency, count_parameters, get_device
 import math
 
 device = get_device()
-L1_REG = 3e-4
+L1_REG = 1e-5
 
 class MLP(nn.Module):
     def __init__(self,
@@ -91,11 +91,12 @@ class ConvBlock(nn.Module):
             self.count += 1
 
 class DynamicCNN(nn.Module):
-    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0., image_size: int = 32, pooling_stride=3) -> None:
+    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0., image_size: int = 32, pooling_stride=2) -> None:
         super().__init__()
         if not channels_list:
             raise ValueError("Channels list should not be empty")
         blocks = []
+        self.pooling_stride = pooling_stride
         self.n_classes = n_classes
         self.dropout = dropout
         self.device = device
@@ -111,7 +112,7 @@ class DynamicCNN(nn.Module):
 
         self.one_by_one_conv = nn.Sequential(
             nn.Conv2d(
-                in_channels=channels_list[-1], out_channels=n_classes, kernel_size=1),
+                in_channels=channels_list[1] + channels_list[-1], out_channels=n_classes, kernel_size=1),
             nn.LeakyReLU(0.2)
         )
 
@@ -131,10 +132,13 @@ class DynamicCNN(nn.Module):
         self.flatten = nn.Flatten()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for layer in self.convs:
+        x = self.convs[0](x)
+        x_skip = x
+        for layer in self.convs[1:]:
             x = layer(x)
-
-        x = self.one_by_one_conv(x)
+            x_skip = nn.MaxPool2d(self.pooling_stride)(x_skip)
+        final_x = torch.cat((x, x_skip), dim=1)
+        x = self.one_by_one_conv(final_x)
         x = self.flatten(x)
         x = self.fc(x)
         return x
@@ -204,24 +208,31 @@ class DynamicCNN(nn.Module):
             next_block = self.convs[index + 1]
             self.upgrade_next_block_input(next_block, new_out_channels)
         elif index == len(self.convs) - 1:  # Upgrading the last ConvBlock
-            self.upgrade_one_by_one_conv(new_out_channels)
-
-    def upgrade_one_by_one_conv(self, new_in_channels):
-        one_by_one_conv = self.one_by_one_conv[0]
-        old_weights = one_by_one_conv.weight.data
-        old_out_channels, old_in_channels, _, _ = old_weights.shape
-
-        # Initialize new weights with the correct shape
-        new_weights = torch.randn((old_out_channels, new_in_channels, 1, 1), device=self.device)*0.01
+            self.upgrade_one_by_one_conv()
         
-        # Copy old weights to the new weights tensor
-        new_weights[:, :old_in_channels, :, :] = old_weights
+        # if upgrading block zero, upgrade also the one by one because of the skip connection
+        if index == 0:
+            self.upgrade_one_by_one_conv()
 
-        # Re-registering the weights as a nn.Parameter
-        one_by_one_conv.in_channels = new_in_channels
+    def upgrade_one_by_one_conv(self):
+        # Sum of the output channels of the first and last ConvBlock
+        total_in_channels = self.convs[0].out_channels + self.convs[-1].out_channels
+
+        # Accessing the one_by_one_conv layer
+        one_by_one_conv = self.one_by_one_conv[0]
+
+        # Adjusting the input channels of the one_by_one_conv layer
+        old_weights = one_by_one_conv.weight.data
+        old_out_channels, _, _, _ = old_weights.shape
+        new_weights = torch.zeros((old_out_channels, total_in_channels, 1, 1), device=self.device)
+
+        # Ensuring that the existing weights are properly allocated in the new weight matrix
+        new_weights[:, :self.convs[0].out_channels, :, :] = old_weights[:, :self.convs[0].out_channels, :, :]
+        new_weights[:, self.convs[0].out_channels:, :, :] = old_weights[:, -self.convs[-1].out_channels:, :, :]
+
+        # Updating the one_by_one_conv layer parameters
+        one_by_one_conv.in_channels = total_in_channels
         one_by_one_conv.weight = nn.Parameter(new_weights)
-
-        # Handling bias if it exists
         if one_by_one_conv.bias is not None:
             one_by_one_conv.bias = nn.Parameter(one_by_one_conv.bias.data)
 
@@ -357,12 +368,10 @@ class DynamicCNN(nn.Module):
         if optimal_action == "add_layer":
             print("\nAdding layer at index", optimal_index)
             self.convs[optimal_index].add_layer()
-            check_network_consistency(self)
             return True
         elif optimal_action == "upgrade_block":
             print("\nUpgrading block at index", optimal_index)
             self.upgrade_block(optimal_index, upgrade_amount)
-            check_network_consistency(self)
             return True
         else:
             print("\nNo expansion or upgrade necessary at this time")
