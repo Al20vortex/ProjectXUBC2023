@@ -12,15 +12,12 @@ def train(model: DynamicCNN,
           val_loader,
           expansion_threshold,
           epochs,
-          upgrade_factor
+          upgrade_amount,
+          initial_lr,
           ) -> dict:
     device = get_device()
     model = model.to(device)
-
-    # LEARNING_RATE = 4e-3
-
-    # optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    # criterion = nn.CrossEntropyLoss()
+    num_params_initial = count_parameters(model)
 
     history = {
         "train_loss": [],
@@ -31,7 +28,7 @@ def train(model: DynamicCNN,
     }
 
     wandb.login()
-    wandb.init(project="SelfExpandingCnn", mode="online")
+    wandb.init(project="SECNN", mode="online")
 
     for epoch in tqdm(range(epochs)):
         model.train()
@@ -69,9 +66,16 @@ def train(model: DynamicCNN,
         val_loss /= len(val_loader)
         val_accuracy = 100 * val_correct / val_total
 
-        # if (epoch % 2) == 0:
         model.expand_if_necessary(
-            train_loader, expansion_threshold, criterion, upgrade_factor)
+            train_loader, expansion_threshold, criterion, upgrade_amount)
+        
+        optimizer = torch.optim.Adam(model.parameters(), lr=initial_lr)  # Reinitialize optimizer
+
+        # Calculate the scaling factor for the learning rate
+        scaling_factor = num_params_initial / (count_parameters(model))
+
+        # Update the learning rate of the optimizer
+        optimizer.param_groups[0]['lr'] = initial_lr * scaling_factor
 
         num_params = count_parameters(model)
         history['train_loss'].append(train_loss)

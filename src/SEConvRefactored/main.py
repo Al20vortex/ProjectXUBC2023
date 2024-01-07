@@ -12,16 +12,16 @@ from torchvision import transforms, datasets
 device = get_device()
 
 BATCH_SIZE = 512
-EPOCHS = 100
-LEARNING_RATE = 4e-3
-UPGRADE_FACTOR = 1.5
+EPOCHS = 1000
+LEARNING_RATE = 1e-2
+UPGRADE_AMT = 8
 
 image_size = 32
 
 train_transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
     transforms.RandomHorizontalFlip(),
-    transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1)), # Random affine transformation
+    # transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1)), # Random affine transformation
     transforms.ToTensor(),
     transforms.Normalize(mean=0.5, std=0.25)
 ])
@@ -42,10 +42,10 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [3, 8, 8, 8]
+channels_list = [3, 16, 32]
 n_classes = 10
 model = DynamicCNN(channels_list=channels_list, n_classes=n_classes).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=[0.9, 0.9])
 criterion = nn.CrossEntropyLoss()
 
 # TODO create a config object where user can set the initial conditions
@@ -63,5 +63,6 @@ history = train(
     val_loader=cifar_test_loader,
     expansion_threshold=2.0,
     epochs=EPOCHS,
-    upgrade_factor = UPGRADE_FACTOR
+    upgrade_amount = UPGRADE_AMT,
+    initial_lr = LEARNING_RATE
 )
