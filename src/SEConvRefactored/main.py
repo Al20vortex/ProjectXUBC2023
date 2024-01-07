@@ -42,18 +42,14 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [3, 16, 32]
+channels_list = [3, 16, 16, 16]
 n_classes = 10
-model = DynamicCNN(channels_list=channels_list, n_classes=n_classes).to(device)
+model = DynamicCNN(channels_list=channels_list, 
+                   n_classes=n_classes, 
+                   image_size=image_size, 
+                   pooling_stride=2).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
-
-# TODO create a config object where user can set the initial conditions
-config = {
-    "use_pooling": True,
-    "use_strided_conv": False,
-    "channels_list": channels_list
-}
 
 history = train(
     model=model,
@@ -64,5 +60,5 @@ history = train(
     expansion_threshold=2.0,
     epochs=EPOCHS,
     upgrade_amount = UPGRADE_AMT,
-    initial_lr = LEARNING_RATE
+    initial_lr = LEARNING_RATE,
 )

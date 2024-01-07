@@ -4,10 +4,11 @@ from typing import List, Union
 from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
 import copy
-from utils import check_network_consistency, get_device
+from utils import check_network_consistency, count_parameters, get_device
+import math
 
 device = get_device()
-L1_REG = 1e-7
+L1_REG = 3e-4
 
 class MLP(nn.Module):
     def __init__(self,
@@ -57,7 +58,8 @@ class ConvBlock(nn.Module):
             self,
             in_channels: int,
             out_channels: int,
-            kernel_size: int) -> None:
+            kernel_size: int,
+            pooling_amount: int) -> None:
         super().__init__()
         convs = list()
         self.count = 0
@@ -70,7 +72,7 @@ class ConvBlock(nn.Module):
                        padding="same"),
              nn.BatchNorm2d(num_features=out_channels),
              nn.LeakyReLU(0.2),
-             nn.MaxPool2d(3)
+             nn.MaxPool2d(pooling_amount)
             ]
         )
         self.convs = nn.ModuleList(convs)
@@ -89,17 +91,7 @@ class ConvBlock(nn.Module):
             self.count += 1
 
 class DynamicCNN(nn.Module):
-    def check_gradients(self):
-        for name, param in self.named_parameters():
-            if param.requires_grad:
-                if param.grad is None:
-                    print(f"Gradient not computed for parameter: {name}")
-                elif torch.all(param.grad == 0):
-                    print(f"Gradient is zero for parameter: {name}")
-                else:
-                    print(f"Gradient is OK for parameter: {name}")
-
-    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0.) -> None:
+    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0., image_size: int = 32, pooling_stride=3) -> None:
         super().__init__()
         if not channels_list:
             raise ValueError("Channels list should not be empty")
@@ -111,20 +103,30 @@ class DynamicCNN(nn.Module):
         for i in range(len(channels_list)-1):
             blocks.extend([ConvBlock(in_channels=channels_list[i],
                                      kernel_size=3,
-                                     out_channels=channels_list[i+1]),
+                                     out_channels=channels_list[i+1],
+                                     pooling_amount=pooling_stride),
             ])
-                        #   nn.MaxPool2d(2)]) # TODO keep maxpooling here?
 
         self.convs = nn.ModuleList(blocks)
-        self.fc = nn.Sequential(
-            MLP(90, 20, dropout=dropout), #TODO dynamically calculate MLP dims
-            nn.BatchNorm1d(20),
-            MLP(20, out_features=n_classes, dropout=dropout, is_output_layer=True)
-        )
+
         self.one_by_one_conv = nn.Sequential(
             nn.Conv2d(
-                in_channels=channels_list[-1], out_channels=10, kernel_size=1),
+                in_channels=channels_list[-1], out_channels=n_classes, kernel_size=1),
             nn.LeakyReLU(0.2)
+        )
+
+        for i in range(len(channels_list) - 1):
+            # Assuming each ConvBlock includes a max pooling layer with kernel_size=3
+            image_size = math.floor((image_size - 1) / pooling_stride)
+            if pooling_stride == 2:
+                image_size+=1
+
+        mlp_input_features = image_size * image_size * n_classes
+
+        self.fc = nn.Sequential(
+            MLP(mlp_input_features, 20, dropout=dropout),
+            nn.BatchNorm1d(20),
+            MLP(20, out_features=n_classes, dropout=dropout, is_output_layer=True)
         )
         self.flatten = nn.Flatten()
 
@@ -156,7 +158,7 @@ class DynamicCNN(nn.Module):
         self.train()
         return fisher_information
 
-    def compute_natural_expansion_score(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss):
+    def compute_natural_expansion_score(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss, current_param_count: int):
         fisher_information = self.compute_fisher_information(dataloader, criterion)
         natural_expansion_score = 0.0
         num_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -176,6 +178,10 @@ class DynamicCNN(nn.Module):
                     natural_expansion_score += torch.sum(param.grad ** 2 * fisher_inv)
         natural_expansion_score /= num_params
 
+        param_increase = num_params - current_param_count
+
+        # natural_expansion_score = natural_expansion_score - L1_REG*math.log(param_increase)
+        natural_expansion_score = natural_expansion_score*math.pow(math.e, -L1_REG*param_increase)
         self.train()
         return natural_expansion_score.item()
 
@@ -310,14 +316,15 @@ class DynamicCNN(nn.Module):
         subset_indices = range(512)  # Adjust the range as needed
         subset = Subset(dataloader.dataset, subset_indices)
         subset_dataloader = DataLoader(subset, batch_size=dataloader.batch_size, shuffle=True)
-        current_score = self.compute_natural_expansion_score(dataloader=subset_dataloader, criterion=criterion)
+        current_param_count = count_parameters(self)
+        current_score = self.compute_natural_expansion_score(dataloader=subset_dataloader, criterion=criterion, current_param_count=current_param_count)
 
         # Evaluate adding new layers
         for index, module in enumerate(self.convs):
             if isinstance(module, ConvBlock):
                 temp_model = copy.deepcopy(self)
                 temp_model.convs[index].add_layer()
-                new_score = temp_model.compute_natural_expansion_score(subset_dataloader, criterion)
+                new_score = temp_model.compute_natural_expansion_score(subset_dataloader, criterion, current_param_count)
                 if (new_score/current_score) > threshold and new_score > best_score:
                     best_score = new_score
                     best_action = "add_layer"
@@ -329,7 +336,7 @@ class DynamicCNN(nn.Module):
             if isinstance(module, ConvBlock):
                 temp_model = copy.deepcopy(self)
                 temp_model.upgrade_block(index, upgrade_amount)
-                new_score = temp_model.compute_natural_expansion_score(subset_dataloader, criterion)
+                new_score = temp_model.compute_natural_expansion_score(subset_dataloader, criterion, current_param_count)
                 print("Current score", current_score)
                 print("New score", new_score)
                 if (new_score/current_score) > threshold and new_score > best_score:
@@ -344,19 +351,20 @@ class DynamicCNN(nn.Module):
                             dataloader: DataLoader,
                             threshold: float,
                             criterion: nn.CrossEntropyLoss = nn.CrossEntropyLoss(),
-                            upgrade_amount = 2):
+                            upgrade_amount = 2) -> bool:
         optimal_action, optimal_index = self.find_optimal_action(
             dataloader=dataloader, threshold=threshold, upgrade_amount=upgrade_amount, criterion=criterion)
         if optimal_action == "add_layer":
             print("\nAdding layer at index", optimal_index)
             self.convs[optimal_index].add_layer()
             check_network_consistency(self)
+            return True
         elif optimal_action == "upgrade_block":
             print("\nUpgrading block at index", optimal_index)
             self.upgrade_block(optimal_index, upgrade_amount)
             check_network_consistency(self)
+            return True
         else:
             print("\nNo expansion or upgrade necessary at this time")
+            return False
         
-        # Check gradients are propogated correclty.
-        # self.check_gradients()
