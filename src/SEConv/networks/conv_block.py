@@ -24,19 +24,40 @@ class ConvBlock(nn.Module):
              nn.BatchNorm2d(num_features=out_channels),
              nn.ReLU()]
         )
+        # self.first_conv = nn.Sequential(
+        #     nn.Conv2d(in_channels=in_channels,
+        #               out_channels=out_channels,
+        #               kernel_size=kernel_size,
+        #               padding="same"),
+        #     nn.BatchNorm2d(num_features=out_channels),
+        #     nn.ReLU()
+        # )
         self.convs = nn.ModuleList(convs)
+        # self.additional_layers = nn.ModuleList()
         self.device = get_device()
+        # self.first_identity_output = None
 
     def forward(self, x):
+        # x = self.first_conv(x)
+
+        # for i, layer in enumerate(self.additional_layers):
+        #     x = layer(x)
+        #     if i == 0 and self.first_identity_output is None:  # Store the output of the first IdentityConvLayer once
+        #         self.first_identity_output = x
+
+        # if self.count == 3 and self.first_identity_output is not None:
+        #     x = x + self.first_identity_output  # Skip connection
         for layer in self.convs:
             x = layer(x)
+
         return x
 
     def add_layer(self):
-        if self.count < 3:
+        if True:  # self.count < 3:
             new_layer = IdentityConvLayer(
                 channels=self.out_channels).to(self.device)
             # self.convs.insert(len(self.convs)-1, new_layer)
+            # self.additional_layers.append(new_layer)
             self.convs.append(new_layer)
             self.count += 1
 

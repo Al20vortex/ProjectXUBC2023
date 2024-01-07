@@ -27,6 +27,12 @@ class DynamicCNN(nn.Module):
                           nn.MaxPool2d(3)])
 
         self.convs = nn.ModuleList(blocks)
+        self.first_conv = self.convs[0]
+        self.last_lonv = self.convs[-2]
+        self.pools = nn.ModuleList([nn.MaxPool2d(3)
+                                   for i in (range(len(channels_list)-1))])
+
+        # print(f"pools: {self.num_pools}")
         self.fc = nn.Sequential(
             MLP(90, 20, dropout=dropout),
             nn.BatchNorm1d(20),
@@ -34,16 +40,33 @@ class DynamicCNN(nn.Module):
         )
         self.one_by_one_conv = nn.Sequential(
             nn.Conv2d(
-                in_channels=channels_list[-1], out_channels=10, kernel_size=1),
+                in_channels=channels_list[-1]+channels_list[-2], out_channels=10, kernel_size=1),
             nn.ReLU()
         )
         self.flatten = nn.Flatten()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for layer in self.convs:
-            x = layer(x)
+        # print(f"x before mp: {x.shape}")
 
-        x = self.one_by_one_conv(x)
+        # first layer
+        # for layer in self.convs[0]:
+        #     x = layer(x)
+
+        x = self.convs[0](x)
+        x_branch = x
+        # breakpoint()
+        for pool in self.pools:
+            x_branch = pool(x_branch)
+
+        for layer in self.convs[1:]:
+            x = layer(x)
+        # print(x.shape)
+        # print(x_branch.shape)
+
+        # final_x = x+x_branch
+        final_x = torch.cat((x, x_branch), dim=1)
+        # print(f"final_x shape: {final_x.shape}")
+        x = self.one_by_one_conv(final_x)
         x = self.flatten(x)
         x = self.fc(x)
         return x
@@ -95,16 +118,16 @@ class DynamicCNN(nn.Module):
                     # score = g^T * F^(-1) * g = g**2 *F^(-1)
                     natural_expansion_score += torch.sum(
                         param.grad ** 2 * fisher_inv)
-
-        num_params = sum(p.numel()
-                         for p in self.parameters() if p.requires_grad)
-        print(f"num params: {num_params}")
-        print(f"np before div{natural_expansion_score}")
-        natural_expansion_score /= (len(dataloader) * num_params)
-        print(f"Natural expansion score: {natural_expansion_score}")
-
         # Setting back to train mode
         self.train()
+        num_params = sum(p.numel()
+                         for p in self.parameters() if p.requires_grad)
+        # print(f"num params: {num_params}")
+        # print(f"np before div{natural_expansion_score}")
+        # natural_expansion_score /= (len(dataloader) * num_params)
+        natural_expansion_score /= num_params
+        # print(f"Natural expansion score: {natural_expansion_score}")
+
         return natural_expansion_score.item()
 
     def expand_if_necessary(self, dataloader: DataLoader,
@@ -148,6 +171,7 @@ class DynamicCNN(nn.Module):
             new_score = temp_model.compute_natural_expansion_score(
                 dataloader, criterion)
             print(f"score at index {index}: {new_score}")
+            print(f"score ratio: {new_score/current_score}")
             if (new_score/current_score) > threshold:
                 scores.append({
                     index: new_score
@@ -159,7 +183,7 @@ class DynamicCNN(nn.Module):
             optimal_index = list(max_dict)[0]
         else:
             optimal_index = None
-        print(f"optimal_index: {optimal_index}")
+        # print(f"optimal_index: {optimal_index}")
         return optimal_index
 
 

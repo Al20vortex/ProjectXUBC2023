@@ -72,7 +72,12 @@ def train(model,
         if (epoch % 2) == 0:
             model.expand_if_necessary(
                 train_loader, expansion_threshold, criterion)
+            optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
         # model.expand_if_necessary(dataloader = train_loader)
+
+        num_params = sum(p.numel()
+                         for p in model.parameters() if p.requires_grad)
+        print(f"num_params: {num_params}")
 
         history['train_loss'].append(train_loss)
         history['val_loss'].append(val_loss)
@@ -85,9 +90,9 @@ def train(model,
         # print(type(val_accuracy))
 
         wandb.log({
-            # "train_loss": train_loss,
+            "train_loss": train_loss,
             "validation_loss": val_loss,
-            # "train_accuracy": train_accuracy,
+            "train_accuracy": train_accuracy,
             "validation_accuracy": val_accuracy
         })
 
