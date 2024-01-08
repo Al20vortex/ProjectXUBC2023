@@ -4,10 +4,11 @@ from typing import List, Union
 from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
 import copy
-from utils import check_network_consistency, get_device
+from utils import check_network_consistency, count_parameters, get_device
+import math
 
 device = get_device()
-L1_REG = 1e-7
+L1_REG = 1e-5
 
 
 class MLP(nn.Module):
@@ -59,7 +60,8 @@ class ConvBlock(nn.Module):
             self,
             in_channels: int,
             out_channels: int,
-            kernel_size: int) -> None:
+            kernel_size: int,
+            pooling_amount: int) -> None:
         super().__init__()
         convs = list()
         self.count = 0
@@ -71,8 +73,8 @@ class ConvBlock(nn.Module):
                        kernel_size=kernel_size,
                        padding="same"),
              nn.BatchNorm2d(num_features=out_channels),
-             nn.LeakyReLU(0.2)  # ,
-             #  nn.MaxPool2d(3)
+             nn.LeakyReLU(0.2),
+             nn.MaxPool2d(pooling_amount)
              ]
         )
         self.convs = nn.ModuleList(convs)
@@ -93,21 +95,12 @@ class ConvBlock(nn.Module):
 
 
 class DynamicCNN(nn.Module):
-    def check_gradients(self):
-        for name, param in self.named_parameters():
-            if param.requires_grad:
-                if param.grad is None:
-                    print(f"Gradient not computed for parameter: {name}")
-                elif torch.all(param.grad == 0):
-                    print(f"Gradient is zero for parameter: {name}")
-                else:
-                    print(f"Gradient is OK for parameter: {name}")
-
-    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0.) -> None:
+    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0., image_size: int = 32, pooling_stride=2) -> None:
         super().__init__()
         if not channels_list:
             raise ValueError("Channels list should not be empty")
         blocks = []
+        self.pooling_stride = pooling_stride
         self.n_classes = n_classes
         self.dropout = dropout
         self.device = device
@@ -116,51 +109,40 @@ class DynamicCNN(nn.Module):
         for i in range(len(channels_list)-1):
             blocks.extend([ConvBlock(in_channels=channels_list[i],
                                      kernel_size=3,
-                                     out_channels=channels_list[i+1]),
-                           nn.MaxPool2d(3)
+                                     out_channels=channels_list[i+1],
+                                     pooling_amount=pooling_stride),
                            ])
-            #   nn.MaxPool2d(2)]) # TODO keep maxpooling here? Yes
 
         self.convs = nn.ModuleList(blocks)
 
-        # self.first_conv = self.convs[0]
-        self.pools = nn.ModuleList([nn.MaxPool2d(3)
-                                   for i in (range(len(channels_list)-1))])
-        print(self.pools)
-        self.fc = nn.Sequential(
-            # TODO dynamically calculate MLP dims
-            MLP(90, 20, dropout=dropout),
-            nn.BatchNorm1d(20),
-            MLP(20, out_features=n_classes, dropout=dropout, is_output_layer=True)
-        )
         self.one_by_one_conv = nn.Sequential(
             nn.Conv2d(
-                in_channels=self.one_by_one_in_channels, out_channels=10, kernel_size=1),
+                in_channels=channels_list[1] + channels_list[-1], out_channels=n_classes, kernel_size=1),
             nn.LeakyReLU(0.2)
+        )
+
+        for i in range(len(channels_list) - 1):
+            # Assuming each ConvBlock includes a max pooling layer with kernel_size=3
+            image_size = math.floor((image_size - 1) / pooling_stride)
+            if pooling_stride == 2:
+                image_size += 1
+
+        mlp_input_features = image_size * image_size * n_classes
+
+        self.fc = nn.Sequential(
+            MLP(mlp_input_features, 20, dropout=dropout),
+            nn.BatchNorm1d(20),
+            MLP(20, out_features=n_classes, dropout=dropout, is_output_layer=True)
         )
         self.flatten = nn.Flatten()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.convs[0](x)
-
-        print(f"refactored X Shape: {x.shape}")
-        x_branch = x
-        for pool in self.pools:
-            x_branch = pool(x_branch)
-
-        print("Branch shape: ", x_branch.shape)
-        print(f"X shape: {x.shape}")
+        x_skip = x
         for layer in self.convs[1:]:
-            print(x.shape)
-            print(self.convs[1:])
             x = layer(x)
-            # print(x)
-
-        final_x = torch.cat((x, x_branch), dim=1)
-        print(final_x.shape, "SHAPE RIGHT HERE")
-        self.one_by_one_in_channels = final_x.shape[1]
-        print("selefu: ", self.one_by_one_conv)
-        print(f"in channels: {self.one_by_one_in_channels}")
+            x_skip = nn.MaxPool2d(self.pooling_stride)(x_skip)
+        final_x = torch.cat((x, x_skip), dim=1)
         x = self.one_by_one_conv(final_x)
         x = self.flatten(x)
         x = self.fc(x)
@@ -186,7 +168,7 @@ class DynamicCNN(nn.Module):
         self.train()
         return fisher_information
 
-    def compute_natural_expansion_score(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss):
+    def compute_natural_expansion_score(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss, current_param_count: int):
         fisher_information = self.compute_fisher_information(
             dataloader, criterion)
         natural_expansion_score = 0.0
@@ -209,6 +191,11 @@ class DynamicCNN(nn.Module):
                         param.grad ** 2 * fisher_inv)
         natural_expansion_score /= num_params
 
+        param_increase = num_params - current_param_count
+
+        # natural_expansion_score = natural_expansion_score - L1_REG*math.log(param_increase)
+        natural_expansion_score = natural_expansion_score * \
+            math.pow(math.e, -L1_REG*param_increase)
         self.train()
         return natural_expansion_score.item()
 
@@ -231,25 +218,35 @@ class DynamicCNN(nn.Module):
             next_block = self.convs[index + 1]
             self.upgrade_next_block_input(next_block, new_out_channels)
         elif index == len(self.convs) - 1:  # Upgrading the last ConvBlock
-            self.upgrade_one_by_one_conv(new_out_channels)
+            self.upgrade_one_by_one_conv()
 
-    def upgrade_one_by_one_conv(self, new_in_channels):
+        # if upgrading block zero, upgrade also the one by one because of the skip connection
+        if index == 0:
+            self.upgrade_one_by_one_conv()
+
+    def upgrade_one_by_one_conv(self):
+        # Sum of the output channels of the first and last ConvBlock
+        total_in_channels = self.convs[0].out_channels + \
+            self.convs[-1].out_channels
+
+        # Accessing the one_by_one_conv layer
         one_by_one_conv = self.one_by_one_conv[0]
+
+        # Adjusting the input channels of the one_by_one_conv layer
         old_weights = one_by_one_conv.weight.data
-        old_out_channels, old_in_channels, _, _ = old_weights.shape
+        old_out_channels, _, _, _ = old_weights.shape
+        new_weights = torch.zeros(
+            (old_out_channels, total_in_channels, 1, 1), device=self.device)
 
-        # Initialize new weights with the correct shape
-        new_weights = torch.randn(
-            (old_out_channels, new_in_channels, 1, 1), device=self.device)*0.01
+        # Ensuring that the existing weights are properly allocated in the new weight matrix
+        new_weights[:, :self.convs[0].out_channels, :,
+                    :] = old_weights[:, :self.convs[0].out_channels, :, :]
+        new_weights[:, self.convs[0].out_channels:, :,
+                    :] = old_weights[:, -self.convs[-1].out_channels:, :, :]
 
-        # Copy old weights to the new weights tensor
-        new_weights[:, :old_in_channels, :, :] = old_weights
-
-        # Re-registering the weights as a nn.Parameter
-        one_by_one_conv.in_channels = new_in_channels
+        # Updating the one_by_one_conv layer parameters
+        one_by_one_conv.in_channels = total_in_channels
         one_by_one_conv.weight = nn.Parameter(new_weights)
-
-        # Handling bias if it exists
         if one_by_one_conv.bias is not None:
             one_by_one_conv.bias = nn.Parameter(one_by_one_conv.bias.data)
 
@@ -350,8 +347,9 @@ class DynamicCNN(nn.Module):
         subset = Subset(dataloader.dataset, subset_indices)
         subset_dataloader = DataLoader(
             subset, batch_size=dataloader.batch_size, shuffle=True)
+        current_param_count = count_parameters(self)
         current_score = self.compute_natural_expansion_score(
-            dataloader=subset_dataloader, criterion=criterion)
+            dataloader=subset_dataloader, criterion=criterion, current_param_count=current_param_count)
 
         # Evaluate adding new layers
         for index, module in enumerate(self.convs):
@@ -359,7 +357,7 @@ class DynamicCNN(nn.Module):
                 temp_model = copy.deepcopy(self)
                 temp_model.convs[index].add_layer()
                 new_score = temp_model.compute_natural_expansion_score(
-                    subset_dataloader, criterion)
+                    subset_dataloader, criterion, current_param_count)
                 if (new_score/current_score) > threshold and new_score > best_score:
                     best_score = new_score
                     best_action = "add_layer"
@@ -372,7 +370,7 @@ class DynamicCNN(nn.Module):
                 temp_model = copy.deepcopy(self)
                 temp_model.upgrade_block(index, upgrade_amount)
                 new_score = temp_model.compute_natural_expansion_score(
-                    subset_dataloader, criterion)
+                    subset_dataloader, criterion, current_param_count)
                 print("Current score", current_score)
                 print("New score", new_score)
                 if (new_score/current_score) > threshold and new_score > best_score:
@@ -387,19 +385,17 @@ class DynamicCNN(nn.Module):
                             dataloader: DataLoader,
                             threshold: float,
                             criterion: nn.CrossEntropyLoss = nn.CrossEntropyLoss(),
-                            upgrade_amount=2):
+                            upgrade_amount=2) -> bool:
         optimal_action, optimal_index = self.find_optimal_action(
             dataloader=dataloader, threshold=threshold, upgrade_amount=upgrade_amount, criterion=criterion)
         if optimal_action == "add_layer":
             print("\nAdding layer at index", optimal_index)
             self.convs[optimal_index].add_layer()
-            check_network_consistency(self)
+            return True
         elif optimal_action == "upgrade_block":
             print("\nUpgrading block at index", optimal_index)
             self.upgrade_block(optimal_index, upgrade_amount)
-            check_network_consistency(self)
+            return True
         else:
             print("\nNo expansion or upgrade necessary at this time")
-
-        # Check gradients are propogated correclty.
-        # self.check_gradients()
+            return False
