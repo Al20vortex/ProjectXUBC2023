@@ -15,7 +15,8 @@ def train(model,
 
     LEARNING_RATE = 4e-3
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=LEARNING_RATE)
     criterion = nn.CrossEntropyLoss()
 
     history = {
@@ -69,10 +70,10 @@ def train(model,
         val_loss /= len(val_loader)
         val_accuracy = 100 * val_correct / val_total
 
-        if (epoch % 2) == 0:
+        if (epoch % 20) == 0:
             model.expand_if_necessary(
                 train_loader, expansion_threshold, criterion)
-            optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
         # model.expand_if_necessary(dataloader = train_loader)
 
         num_params = sum(p.numel()

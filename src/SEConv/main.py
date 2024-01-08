@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 device = get_device()
 
 BATCH_SIZE = 400
-EPOCHS = 100
+EPOCHS = 400
 # print(emnist_train[0][0].shape)
 train_loader = DataLoader(emnist_train, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(emnist_val, batch_size=BATCH_SIZE, shuffle=False)
@@ -21,7 +21,7 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False)
 
-channels_list = [3, 16, 32]
+channels_list = [3, 16, 16, 32]
 n_classes = 10
 model = DynamicCNN(channels_list=channels_list, n_classes=10)
 criterion = nn.CrossEntropyLoss()
@@ -36,8 +36,8 @@ def imshow(img):
 
 
 if __name__ == "__main__":
-    model = DynamicCNN(channels_list, 10, 0.2)
-    print(model.convs[0])
+    model = DynamicCNN(channels_list, 10, dropout=0.2)
+    # print(model.convs[0])
     history = train(
         model=model,
         train_loader=cifar_train_loader,
