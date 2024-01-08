@@ -8,7 +8,7 @@ from utils import check_network_consistency, count_parameters, get_device
 import math
 
 device = get_device()
-L1_REG = 1e-5
+NES_REG = 5e-5
 
 class MLP(nn.Module):
     def __init__(self,
@@ -59,17 +59,20 @@ class ConvBlock(nn.Module):
             in_channels: int,
             out_channels: int,
             kernel_size: int,
-            pooling_amount: int) -> None:
+            pooling_amount: int,
+            dropout: float) -> None:
         super().__init__()
         convs = list()
         self.count = 0
         self.out_channels = out_channels
         self.kernel_size = kernel_size
+        self.dropout = dropout
         convs.extend(
             [nn.Conv2d(in_channels=in_channels,
                        out_channels=out_channels,
                        kernel_size=kernel_size,
                        padding="same"),
+             nn.Dropout(self.dropout),
              nn.BatchNorm2d(num_features=out_channels),
              nn.LeakyReLU(0.2),
              nn.MaxPool2d(pooling_amount)
@@ -100,12 +103,14 @@ class DynamicCNN(nn.Module):
         self.n_classes = n_classes
         self.dropout = dropout
         self.device = device
+        self.dropout = dropout
 
         for i in range(len(channels_list)-1):
             blocks.extend([ConvBlock(in_channels=channels_list[i],
                                      kernel_size=3,
                                      out_channels=channels_list[i+1],
-                                     pooling_amount=pooling_stride),
+                                     pooling_amount=pooling_stride,
+                                     dropout=self.dropout),
             ])
 
         self.convs = nn.ModuleList(blocks)
@@ -185,7 +190,7 @@ class DynamicCNN(nn.Module):
         param_increase = num_params - current_param_count
 
         # natural_expansion_score = natural_expansion_score - L1_REG*math.log(param_increase)
-        natural_expansion_score = natural_expansion_score*math.pow(math.e, -L1_REG*param_increase)
+        natural_expansion_score = natural_expansion_score*math.pow(math.e, -NES_REG*param_increase)
         self.train()
         return natural_expansion_score.item()
 
