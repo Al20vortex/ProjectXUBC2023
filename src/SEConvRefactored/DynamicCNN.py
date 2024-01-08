@@ -8,7 +8,8 @@ from utils import check_network_consistency, count_parameters, get_device
 import math
 
 device = get_device()
-NES_REG = 5e-5
+# NES_REG = 3e-5
+NES_REG = 1e-6
 
 
 class MLP(nn.Module):
@@ -45,7 +46,7 @@ class IdentityConvLayer(nn.Module):
         noise = torch.randn(identity_matrix.shape) * 0.01
         identity_matrix_with_noise = identity_matrix + noise
         with torch.no_grad():
-            conv.weight.copy_(identity_matrix)
+            conv.weight.copy_(identity_matrix_with_noise)
         self.conv = nn.Sequential(conv,
                                   nn.BatchNorm2d(channels),
                                   nn.LeakyReLU(0.2)).to(device)
@@ -74,7 +75,7 @@ class ConvBlock(nn.Module):
                        out_channels=out_channels,
                        kernel_size=kernel_size,
                        padding="same"),
-             nn.Dropout(self.dropout),
+             nn.Dropout2d(self.dropout),
              nn.BatchNorm2d(num_features=out_channels),
              nn.LeakyReLU(0.2),
              nn.MaxPool2d(pooling_amount)
@@ -89,11 +90,10 @@ class ConvBlock(nn.Module):
         return x
 
     def add_layer(self):
-        if self.count < 6:
+        if self.count < 5:
             new_layer = IdentityConvLayer(
                 channels=self.out_channels).to(self.device)
-            # self.convs.insert(len(self.convs)-2, new_layer)
-            self.convs.append(new_layer)
+            self.convs.insert(len(self.convs)-1, new_layer)
             self.count += 1
 
 
@@ -134,9 +134,9 @@ class DynamicCNN(nn.Module):
         mlp_input_features = image_size * image_size * n_classes
 
         self.fc = nn.Sequential(
-            MLP(mlp_input_features, 20, dropout=dropout),
+            MLP(mlp_input_features, 20, dropout=dropout/2),
             nn.BatchNorm1d(20),
-            MLP(20, out_features=n_classes, dropout=dropout, is_output_layer=True)
+            MLP(20, out_features=n_classes, dropout=dropout/2, is_output_layer=True)
         )
         self.flatten = nn.Flatten()
 
@@ -198,7 +198,8 @@ class DynamicCNN(nn.Module):
         param_increase = num_params - current_param_count
 
         # natural_expansion_score = natural_expansion_score - L1_REG*math.log(param_increase)
-        natural_expansion_score = natural_expansion_score*math.pow(math.e, -NES_REG*param_increase)
+        # natural_expansion_score = natural_expansion_score*math.pow(math.e, -NES_REG*param_increase)
+        natural_expansion_score = natural_expansion_score * math.exp(-NES_REG * param_increase ** 2)
         self.train()
         return natural_expansion_score.item()
 

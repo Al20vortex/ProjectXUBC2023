@@ -4,18 +4,15 @@ from torch.utils.data import DataLoader
 from DynamicCNN import *
 from train import train
 from utils import get_device
-import copy
-import numpy as np
-import matplotlib.pyplot as plt
 from torchvision import transforms, datasets
 
 device = get_device()
 
 BATCH_SIZE = 512
 EPOCHS = 1000
-LEARNING_RATE = 4e-3
+LEARNING_RATE = 2e-3
 UPGRADE_AMT = 2
-DROPOUT = 0.3
+DROPOUT = 0.1
 image_size = 32
 
 train_transform = transforms.Compose([
@@ -38,16 +35,16 @@ cifar_test = datasets.CIFAR10(
     root="./cifar_test", train=False, transform=val_transform, download=True)
 
 cifar_train_loader = DataLoader(
-    cifar_train, batch_size=BATCH_SIZE, shuffle=True)
+    cifar_train, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 cifar_test_loader = DataLoader(
-    cifar_test, batch_size=BATCH_SIZE, shuffle=False)
+    cifar_test, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
 
-channels_list = [3, 16, 16, 16]
+channels_list = [3, 8, 8, 8]
 n_classes = 10
 model = DynamicCNN(channels_list=channels_list,
                    n_classes=n_classes, 
                    image_size=image_size, 
-                   pooling_stride=2, 
+                   pooling_stride=2,
                    dropout=DROPOUT).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
