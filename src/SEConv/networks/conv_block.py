@@ -53,7 +53,7 @@ class ConvBlock(nn.Module):
         return x
 
     def add_layer(self):
-        if True:  # self.count < 3:
+        if self.count < 10:
             new_layer = IdentityConvLayer(
                 channels=self.out_channels).to(self.device)
             # self.convs.insert(len(self.convs)-1, new_layer)

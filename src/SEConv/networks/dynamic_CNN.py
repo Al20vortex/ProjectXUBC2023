@@ -11,7 +11,7 @@ from .conv_block import *
 
 
 class DynamicCNN(nn.Module):
-    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0.) -> None:
+    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0.2) -> None:
         super().__init__()
         if not channels_list:
             raise ValueError("Channels list should not be empty")
@@ -23,24 +23,27 @@ class DynamicCNN(nn.Module):
         for i in range(len(channels_list)-1):
             blocks.extend([ConvBlock(in_channels=channels_list[i],
                                      kernel_size=3,
-                                     out_channels=channels_list[i+1]),
-                          nn.MaxPool2d(3)])
+                                     out_channels=channels_list[i+1]
+                                     ),
+                          nn.MaxPool2d(2)])
 
         self.convs = nn.ModuleList(blocks)
         self.first_conv = self.convs[0]
         self.last_lonv = self.convs[-2]
-        self.pools = nn.ModuleList([nn.MaxPool2d(3)
+        self.pools = nn.ModuleList([nn.MaxPool2d(2)
                                    for i in (range(len(channels_list)-1))])
 
         # print(f"pools: {self.num_pools}")
         self.fc = nn.Sequential(
+            MLP(160, 90, dropout=dropout),
+            nn.BatchNorm1d(90),
             MLP(90, 20, dropout=dropout),
             nn.BatchNorm1d(20),
             MLP(20, out_features=n_classes, dropout=dropout, is_output_layer=True)
         )
         self.one_by_one_conv = nn.Sequential(
             nn.Conv2d(
-                in_channels=channels_list[-1]+channels_list[-2], out_channels=10, kernel_size=1),
+                in_channels=channels_list[-1]+channels_list[1], out_channels=10, kernel_size=1),
             nn.ReLU()
         )
         self.flatten = nn.Flatten()
@@ -53,6 +56,7 @@ class DynamicCNN(nn.Module):
         #     x = layer(x)
 
         x = self.convs[0](x)
+        # print(f"initial X Shape: {x.shape}")
         x_branch = x
         # breakpoint()
         for pool in self.pools:

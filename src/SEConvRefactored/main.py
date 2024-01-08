@@ -60,6 +60,6 @@ history = train(
     val_loader=cifar_test_loader,
     expansion_threshold=2.0,
     epochs=EPOCHS,
-    upgrade_amount = UPGRADE_AMT,
-    initial_lr = LEARNING_RATE,
+    upgrade_amount=UPGRADE_AMT,
+    initial_lr=LEARNING_RATE,
 )
