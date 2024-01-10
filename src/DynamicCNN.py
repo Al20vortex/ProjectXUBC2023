@@ -12,93 +12,23 @@ NES_REG = 1e-7
 # NOISE_COEFF = 1e-4
 NOISE_COEFF = 1e-4
 
-class MLP(nn.Module):
-    def __init__(self,
-                 in_features: int,
-                 out_features: int,
-                 dropout: float = 0.0,
-                 is_output_layer: bool = False):
-        super().__init__()
-        fc = []
-        layer = nn.Linear(in_features=in_features, out_features=out_features)
-        fc.append(layer)
-        if not is_output_layer:
-            fc.extend([nn.BatchNorm1d(num_features=out_features),
-                      nn.LeakyReLU(0.2),
-                      nn.Dropout(dropout)])
-
-        self.fc = nn.ModuleList(fc)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for layer in self.fc:
-            x = layer(x)
-        return x
-
-
-class IdentityConvLayer(nn.Module):
-    def __init__(self, channels: int) -> None:
-        super().__init__()
-        conv = nn.Conv2d(channels, channels,
-                         kernel_size=3, padding="same", bias=False)
-
-        # Creating an identity matrix with added noise
-        identity_matrix = torch.eye(channels).view(channels, channels, 1, 1)
-        noise = torch.randn(identity_matrix.shape) * NOISE_COEFF
-        identity_matrix_with_noise = identity_matrix + noise
-        with torch.no_grad():
-            conv.weight.copy_(identity_matrix_with_noise)
-        self.conv = nn.Sequential(conv,
-                                  nn.BatchNorm2d(channels),
-                                  nn.LeakyReLU(0.2)).to(device)
-
-    def forward(self, x: torch.tensor) -> torch.tensor:
-        return self.conv(x)
-
-
-class ConvBlock(nn.Module):
-
-    def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: int,
-            pooling_amount: int,
-            dropout: float) -> None:
-        super().__init__()
-        convs = list()
-        self.count = 0
-        self.out_channels = out_channels
-        self.kernel_size = kernel_size
-        self.dropout = dropout
-        convs.extend(
-            [nn.Conv2d(in_channels=in_channels,
-                       out_channels=out_channels,
-                       kernel_size=kernel_size,
-                       padding="same"),
-             nn.Dropout2d(self.dropout),
-             nn.BatchNorm2d(num_features=out_channels),
-             nn.LeakyReLU(0.2),
-             nn.MaxPool2d(pooling_amount)
-             ]
-        )
-        self.convs = nn.ModuleList(convs)
-        self.device = device
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for layer in self.convs:
-            x = layer(x)
-        return x
-
-    def add_layer(self):
-        if self.count < 10:  # BEST 5
-            new_layer = IdentityConvLayer(
-                channels=self.out_channels).to(self.device)
-            self.convs.insert(len(self.convs)-1, new_layer)
-            self.count += 1
-
 
 class DynamicCNN(nn.Module):
-    def __init__(self, channels_list: List[int], n_classes: int, dropout: float = 0., image_size: int = 32, pooling_stride=2) -> None:
+    def __init__(self, channels_list: List[int],
+                 n_classes: int,
+                 dropout: float = 0.,
+                 image_size: int = 32,
+                 pooling_stride=2) -> None:
+        """
+        A dynamically expanding convolutional neural network architecture
+
+        Args:
+            channels_list (List[int]): The list of the order of in channels per block
+            n_classes (int): The number of classes in the output layer
+            dropout (float, optional): regularizer. Defaults to 0..
+            image_size (int, optional): The image dimensions. Defaults to 32.
+            pooling_stride (int, optional): Defaults to 2.
+        """
         super().__init__()
         if not channels_list:
             raise ValueError("Channels list should not be empty")
@@ -115,7 +45,7 @@ class DynamicCNN(nn.Module):
                                      out_channels=channels_list[i+1],
                                      pooling_amount=pooling_stride,
                                      dropout=self.dropout),
-            ])
+                           ])
 
         self.convs = nn.ModuleList(blocks)
 
@@ -136,7 +66,8 @@ class DynamicCNN(nn.Module):
         self.fc = nn.Sequential(
             MLP(mlp_input_features, 20, dropout=dropout/2),
             nn.BatchNorm1d(20),
-            MLP(20, out_features=n_classes, dropout=dropout/2, is_output_layer=True)
+            MLP(20, out_features=n_classes,
+                dropout=dropout/2, is_output_layer=True)
         )
         self.flatten = nn.Flatten()
 
@@ -153,6 +84,9 @@ class DynamicCNN(nn.Module):
         return x
 
     def compute_fisher_information(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss):
+        """
+        Computes the empirical fisher
+        """
         fisher_information = {name: torch.zeros_like(
             param) for name, param in self.named_parameters()}
 
@@ -172,7 +106,14 @@ class DynamicCNN(nn.Module):
         self.train()
         return fisher_information
 
-    def compute_natural_expansion_score(self, dataloader: DataLoader, criterion: nn.CrossEntropyLoss, current_param_count: int):
+    def compute_natural_expansion_score(self,
+                                        dataloader: DataLoader,
+                                        criterion: nn.CrossEntropyLoss,
+                                        current_param_count: int) -> float:
+        """
+        Computes the natural expansion score as introduced in the paper `self expanding neural networks`. 
+        It also regularizes the expansion score by taking into consideration the parameter increase
+        """
         fisher_information = self.compute_fisher_information(
             dataloader, criterion)
         natural_expansion_score = 0.0
@@ -197,11 +138,16 @@ class DynamicCNN(nn.Module):
 
         param_increase = num_params - current_param_count
 
-        natural_expansion_score = natural_expansion_score * math.exp(-NES_REG * param_increase ** 2)
+        natural_expansion_score = natural_expansion_score * \
+            math.exp(-NES_REG * param_increase ** 2)
         self.train()
         return natural_expansion_score.item()
 
     def upgrade_block(self, index, upgrade_amount):
+        """
+        Upgrades a block by increasing the number of out_channels of cnn layers in the block by the upgrade_amount.
+        adjusts the batchnormalization layer to accept the new number of channels. 
+        """
         block = self.convs[index]
         new_out_channels = int(block.out_channels + upgrade_amount)
 
@@ -227,6 +173,9 @@ class DynamicCNN(nn.Module):
             self.upgrade_one_by_one_conv()
 
     def upgrade_one_by_one_conv(self):
+        """
+        Increase the number of in_channels in the one by one cnn layer
+        """
         # Sum of the output channels of the first and last ConvBlock
         total_in_channels = self.convs[0].out_channels + \
             self.convs[-1].out_channels
@@ -339,7 +288,14 @@ class DynamicCNN(nn.Module):
         layer.bias = nn.Parameter(torch.zeros(
             new_out_channels, device=self.device))
 
-    def find_optimal_action(self, dataloader: DataLoader, threshold: float, upgrade_amount: int, criterion: nn.CrossEntropyLoss) -> Union[str, int]:
+    def find_optimal_action(self,
+                            dataloader: DataLoader,
+                            threshold: float,
+                            upgrade_amount: int,
+                            criterion: nn.CrossEntropyLoss) -> Union[str, int]:
+        """
+        Determines whether the network needs an upgrade in the number of channels, or an addition of a layer in a block
+        """
         best_score = 0
         best_action = None
         best_index = None
@@ -401,3 +357,102 @@ class DynamicCNN(nn.Module):
         else:
             print("\nNo expansion or upgrade necessary at this time")
             return False
+
+
+class ConvBlock(nn.Module):
+    """
+    An expandable block. 
+    """
+
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: int,
+            pooling_amount: int,
+            dropout: float) -> None:
+        super().__init__()
+        convs = list()
+        self.count = 0
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.dropout = dropout
+        convs.extend(
+            [nn.Conv2d(in_channels=in_channels,
+                       out_channels=out_channels,
+                       kernel_size=kernel_size,
+                       padding="same"),
+             nn.Dropout2d(self.dropout),
+             nn.BatchNorm2d(num_features=out_channels),
+             nn.LeakyReLU(0.2),
+             nn.MaxPool2d(pooling_amount)
+             ]
+        )
+        self.convs = nn.ModuleList(convs)
+        self.device = device
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for layer in self.convs:
+            x = layer(x)
+        return x
+
+    def add_layer(self):
+        """
+        Adds an identity layer if the maximum capacity is not yet filled
+        """
+        if self.count < 10:  # BEST 5
+            new_layer = IdentityConvLayer(
+                channels=self.out_channels).to(self.device)
+            self.convs.insert(len(self.convs)-1, new_layer)
+            self.count += 1
+
+
+class MLP(nn.Module):
+    """
+    A fully connected layer
+    """
+
+    def __init__(self,
+                 in_features: int,
+                 out_features: int,
+                 dropout: float = 0.0,
+                 is_output_layer: bool = False):
+        super().__init__()
+        fc = []
+        layer = nn.Linear(in_features=in_features, out_features=out_features)
+        fc.append(layer)
+        if not is_output_layer:
+            fc.extend([nn.BatchNorm1d(num_features=out_features),
+                      nn.LeakyReLU(0.2),
+                      nn.Dropout(dropout)])
+
+        self.fc = nn.ModuleList(fc)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for layer in self.fc:
+            x = layer(x)
+        return x
+
+
+class IdentityConvLayer(nn.Module):
+    """
+    An identity conv layer with weights initialized to Identity, with a bit of gausian noise added. 
+    """
+
+    def __init__(self, channels: int) -> None:
+        super().__init__()
+        conv = nn.Conv2d(channels, channels,
+                         kernel_size=3, padding="same", bias=False)
+
+        # Creating an identity matrix with added noise
+        identity_matrix = torch.eye(channels).view(channels, channels, 1, 1)
+        noise = torch.randn(identity_matrix.shape) * NOISE_COEFF
+        identity_matrix_with_noise = identity_matrix + noise
+        with torch.no_grad():
+            conv.weight.copy_(identity_matrix_with_noise)
+        self.conv = nn.Sequential(conv,
+                                  nn.BatchNorm2d(channels),
+                                  nn.LeakyReLU(0.2)).to(device)
+
+    def forward(self, x: torch.tensor) -> torch.tensor:
+        return self.conv(x)
