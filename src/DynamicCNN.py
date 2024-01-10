@@ -344,6 +344,9 @@ class DynamicCNN(nn.Module):
                             threshold: float,
                             criterion: nn.CrossEntropyLoss = nn.CrossEntropyLoss(),
                             upgrade_amount=2) -> bool:
+        """
+        Returns True if the network deems it necessary to expand
+        """
         optimal_action, optimal_index = self.find_optimal_action(
             dataloader=dataloader, threshold=threshold, upgrade_amount=upgrade_amount, criterion=criterion)
         if optimal_action == "add_layer":
