@@ -412,7 +412,7 @@ class ConvBlock(nn.Module):
 
 class MLP(nn.Module):
     """
-    A fully connected layer
+    A fully connected layer followed by a batchnorm, activation and a dropout layer
     """
 
     def __init__(self,
