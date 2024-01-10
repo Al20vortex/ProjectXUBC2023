@@ -5,9 +5,7 @@ from tqdm import tqdm
 from utils import get_device, count_parameters
 from DynamicCNN import DynamicCNN
 
-# L1_REG = 1e-4
-# L1_REG = 1e-5
-L1_REG = 5e-6
+L1_REG = 1e-5
 
 def train(model: DynamicCNN,
           optimizer,
@@ -22,7 +20,7 @@ def train(model: DynamicCNN,
     device = get_device()
     model = model.to(device)
     cooldown = 0
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=15, verbose=True)
 
     history = {
         "train_loss": [],
@@ -34,7 +32,7 @@ def train(model: DynamicCNN,
     }
 
     wandb.login()
-    wandb.init(project="SECNN", mode="online")
+    wandb.init(project="SECNN-Paper-Data", mode="online")
 
     for epoch in tqdm(range(epochs)):
         model.train()
@@ -86,9 +84,14 @@ def train(model: DynamicCNN,
             expanded = model.expand_if_necessary(
                 train_loader, expansion_threshold, criterion, upgrade_amount)
             if expanded:
+                old_state = optimizer.state
                 optimizer = torch.optim.Adam(model.parameters(), lr=current_lr)  # Reinitialize optimizer
+                # Restore state for existing parameters
+                for param in model.parameters():
+                    if param in old_state:
+                        optimizer.state[param] = old_state[param]
                 scheduler.optimizer = optimizer  # Maintain reference to correct optimizer
-                cooldown = 10
+                cooldown = 5
                 print(model.convs)
         cooldown -= 1
 

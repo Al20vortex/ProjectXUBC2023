@@ -4,13 +4,13 @@ from typing import List, Union
 from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
 import copy
-from utils import check_network_consistency, count_parameters, get_device
+from utils import count_parameters, get_device
 import math
 
 device = get_device()
-# NES_REG = 3e-5
-NES_REG = 1e-6
-
+NES_REG = 1e-7
+# NOISE_COEFF = 1e-4
+NOISE_COEFF = 1e-2
 
 class MLP(nn.Module):
     def __init__(self,
@@ -43,7 +43,7 @@ class IdentityConvLayer(nn.Module):
 
         # Creating an identity matrix with added noise
         identity_matrix = torch.eye(channels).view(channels, channels, 1, 1)
-        noise = torch.randn(identity_matrix.shape) * 0.01
+        noise = torch.randn(identity_matrix.shape) * NOISE_COEFF
         identity_matrix_with_noise = identity_matrix + noise
         with torch.no_grad():
             conv.weight.copy_(identity_matrix_with_noise)
@@ -90,7 +90,7 @@ class ConvBlock(nn.Module):
         return x
 
     def add_layer(self):
-        if self.count < 5:
+        if self.count < 10:  # BEST 5
             new_layer = IdentityConvLayer(
                 channels=self.out_channels).to(self.device)
             self.convs.insert(len(self.convs)-1, new_layer)
@@ -197,8 +197,6 @@ class DynamicCNN(nn.Module):
 
         param_increase = num_params - current_param_count
 
-        # natural_expansion_score = natural_expansion_score - L1_REG*math.log(param_increase)
-        # natural_expansion_score = natural_expansion_score*math.pow(math.e, -NES_REG*param_increase)
         natural_expansion_score = natural_expansion_score * math.exp(-NES_REG * param_increase ** 2)
         self.train()
         return natural_expansion_score.item()
@@ -263,7 +261,7 @@ class DynamicCNN(nn.Module):
 
         # Initializing new weights
         new_weights = torch.randn(
-            (new_out_channels, old_in_channels, kernel_height, kernel_width), device=self.device) * 0.01
+            (new_out_channels, old_in_channels, kernel_height, kernel_width), device=self.device) * NOISE_COEFF
         new_weights[:old_out_channels, :, :, :] = old_weights
 
         # Handling bias
@@ -310,7 +308,7 @@ class DynamicCNN(nn.Module):
 
         # Initializing new weights
         new_weights = torch.randn(
-            (old_out_channels, new_in_channels, kernel_height, kernel_width), device=self.device) * 0.01
+            (old_out_channels, new_in_channels, kernel_height, kernel_width), device=self.device) * NOISE_COEFF
         new_weights[:, :first_layer.in_channels, :, :] = old_weights
 
         # Re-registering parameters

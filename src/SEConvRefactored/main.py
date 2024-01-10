@@ -11,22 +11,21 @@ device = get_device()
 BATCH_SIZE = 512
 EPOCHS = 1000
 LEARNING_RATE = 2e-3
-UPGRADE_AMT = 2
+UPGRADE_AMT = 4 # BEST
 DROPOUT = 0.1
 image_size = 32
 
 train_transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
     transforms.RandomHorizontalFlip(),
-    # transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1)), # Random affine transformation
     transforms.ToTensor(),
-    transforms.Normalize(mean=0.5, std=0.25)
+    transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
 ])
 
 val_transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
     transforms.ToTensor(),
-    transforms.Normalize(mean=0.5, std=0.25)
+    transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
 ])
 
 cifar_train = datasets.CIFAR10(
@@ -39,7 +38,7 @@ cifar_train_loader = DataLoader(
 cifar_test_loader = DataLoader(
     cifar_test, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
 
-channels_list = [3, 8, 8, 8]
+channels_list = [3, 16, 16, 16]
 n_classes = 10
 model = DynamicCNN(channels_list=channels_list,
                    n_classes=n_classes, 
