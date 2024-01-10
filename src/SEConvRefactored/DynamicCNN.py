@@ -10,7 +10,7 @@ import math
 device = get_device()
 NES_REG = 1e-7
 # NOISE_COEFF = 1e-4
-NOISE_COEFF = 1e-3
+NOISE_COEFF = 1e-4
 
 class MLP(nn.Module):
     def __init__(self,
