@@ -2,25 +2,27 @@ import torch.nn as nn
 import wandb
 import torch
 from tqdm import tqdm
-from utils import get_device, count_parameters
-from DynamicCNN import DynamicCNN
+from .utils import get_device, count_parameters
+# from models import DynamicCNN
 
 L1_REG = 1e-5
 
-def train(model: DynamicCNN,
-          optimizer,
-          criterion,
-          train_loader,
-          val_loader,
-          expansion_threshold,
-          epochs,
-          upgrade_amount,
-          initial_lr,
-          ) -> dict:
+
+def train_model(model,  # : DynamicCNN,
+                optimizer,
+                criterion,
+                train_loader,
+                val_loader,
+                expansion_threshold,
+                epochs,
+                upgrade_amount,
+                initial_lr,
+                ) -> dict:
     device = get_device()
     model = model.to(device)
     cooldown = 0
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=15, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=15, verbose=True)
 
     history = {
         "train_loss": [],
@@ -42,7 +44,7 @@ def train(model: DynamicCNN,
 
             optimizer.zero_grad()
             outputs = model(inputs)
-            
+
             # Calculate L1 Regularization
             l1_reg = torch.tensor(0.).to(device)
             for param in model.parameters():
@@ -85,7 +87,8 @@ def train(model: DynamicCNN,
                 train_loader, expansion_threshold, criterion, upgrade_amount)
             if expanded:
                 old_state = optimizer.state
-                optimizer = torch.optim.Adam(model.parameters(), lr=current_lr)  # Reinitialize optimizer
+                optimizer = torch.optim.Adam(
+                    model.parameters(), lr=current_lr)  # Reinitialize optimizer
                 # Restore state for existing parameters
                 for param in model.parameters():
                     if param in old_state:

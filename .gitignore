@@ -8,3 +8,4 @@ src/SEViT/
 cifar_test/
 cifar_train/
 llama-duck-ds/
+datasets/

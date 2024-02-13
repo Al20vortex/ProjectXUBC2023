@@ -5,6 +5,10 @@ from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
 import copy
 from utils import count_parameters, get_device
+# from .DynamicCNN import DynamicCNN
+from .identityConv import IdentityConvLayer
+from .convBlock import ConvBlock
+from .perceptron import MLP
 import math
 
 device = get_device()
@@ -360,102 +364,3 @@ class DynamicCNN(nn.Module):
         else:
             print("\nNo expansion or upgrade necessary at this time")
             return False
-
-
-class ConvBlock(nn.Module):
-    """
-    An expandable block. 
-    """
-
-    def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: int,
-            pooling_amount: int,
-            dropout: float) -> None:
-        super().__init__()
-        convs = list()
-        self.count = 0
-        self.out_channels = out_channels
-        self.kernel_size = kernel_size
-        self.dropout = dropout
-        convs.extend(
-            [nn.Conv2d(in_channels=in_channels,
-                       out_channels=out_channels,
-                       kernel_size=kernel_size,
-                       padding="same"),
-             nn.Dropout2d(self.dropout),
-             nn.BatchNorm2d(num_features=out_channels),
-             nn.LeakyReLU(0.2),
-             nn.MaxPool2d(pooling_amount)
-             ]
-        )
-        self.convs = nn.ModuleList(convs)
-        self.device = device
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for layer in self.convs:
-            x = layer(x)
-        return x
-
-    def add_layer(self):
-        """
-        Adds an identity layer if the maximum capacity is not yet filled
-        """
-        if self.count < 10:  # BEST 5
-            new_layer = IdentityConvLayer(
-                channels=self.out_channels).to(self.device)
-            self.convs.insert(len(self.convs)-1, new_layer)
-            self.count += 1
-
-
-class MLP(nn.Module):
-    """
-    A fully connected layer followed by a batchnorm, activation and a dropout layer
-    """
-
-    def __init__(self,
-                 in_features: int,
-                 out_features: int,
-                 dropout: float = 0.0,
-                 is_output_layer: bool = False):
-        super().__init__()
-        fc = []
-        layer = nn.Linear(in_features=in_features, out_features=out_features)
-        fc.append(layer)
-        if not is_output_layer:
-            fc.extend([nn.BatchNorm1d(num_features=out_features),
-                      nn.LeakyReLU(0.2),
-                      nn.Dropout(dropout)])
-
-        self.fc = nn.ModuleList(fc)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for layer in self.fc:
-            x = layer(x)
-        return x
-
-
-class IdentityConvLayer(nn.Module):
-    """
-    An identity conv layer with weights initialized to Identity, with a bit of gausian noise added. 
-    """
-
-    def __init__(self, channels: int) -> None:
-        super().__init__()
-        conv = nn.Conv2d(channels, channels,
-                         kernel_size=3, padding="same", bias=False)
-
-        # Creating an identity matrix with added noise
-        identity_matrix = torch.eye(channels).view(channels, channels, 1, 1)
-        noise = torch.randn(identity_matrix.shape) * NOISE_COEFF
-        identity_matrix_with_noise = identity_matrix + noise
-        with torch.no_grad():
-            conv.weight.copy_(identity_matrix_with_noise)
-        self.conv = nn.Sequential(conv,
-                                  nn.BatchNorm2d(channels),
-                                  nn.LeakyReLU(0.2)).to(device)
-
-    def forward(self, x: torch.tensor) -> torch.tensor:
-        return self.conv(x)
